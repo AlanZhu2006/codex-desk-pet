@@ -6,7 +6,7 @@ import CoreGraphics
 struct IdleBehavior {
     struct Output {
         let origin: CGPoint?
-        /// `idle` / `waving` are atlas animations; `static:name` is a portrait.
+        /// `idle` / `waving` are named states; `static:name` selects a portrait.
         let pose: String?
 
         static let none = Output(origin: nil, pose: nil)
@@ -17,8 +17,6 @@ struct IdleBehavior {
         let to: CGPoint
         let startedAt: TimeInterval
         let duration: TimeInterval
-        let frequency: Double
-        let amplitude: CGFloat
     }
 
     private struct RandomSource {
@@ -85,7 +83,7 @@ struct IdleBehavior {
         guard now.isFinite else { return .none }
         let timeJumped = lastUpdateAt.map { now < $0 || now - $0 > 1 } ?? false
         lastUpdateAt = now
-        let canIdle = eligible && !reduceMotion && !pointerNear
+        let canIdle = eligible && !reduceMotion
 
         guard canIdle else {
             journey = nil
@@ -136,6 +134,15 @@ struct IdleBehavior {
             previousWanderingEnabled = wanderingEnabled
         }
 
+        // Being nearby should make the companion easy to grab, without
+        // restarting its expression clock every time the pointer passes it.
+        // Keep poses alive; stop only window movement and leave a short grace
+        // period after the pointer departs before another stroll may begin.
+        if pointerNear {
+            journey = nil
+            nextJourneyAt = max(nextJourneyAt, now + 2)
+        }
+
         if let deadline = poseUntil, now >= deadline {
             poseUntil = nil
             currentPose = "idle"
@@ -154,7 +161,7 @@ struct IdleBehavior {
             if pose != "idle" { poseUntil = now + random.value(2.5, 4.5) }
         }
 
-        if wanderingEnabled && journey == nil && currentPose == "idle" && now >= nextJourneyAt {
+        if wanderingEnabled && !pointerNear && journey == nil && currentPose == "idle" && now >= nextJourneyAt {
             beginJourney(now: now)
         }
 
@@ -182,12 +189,10 @@ struct IdleBehavior {
     private mutating func choosePose() -> String {
         let choice = random.unit()
         switch choice {
-        case ..<0.45: return "idle"
-        case ..<0.60: return "static:smile"
-        case ..<0.75: return "static:smile-closed"
-        case ..<0.83: return "static:confident"
-        case ..<0.91: return "static:notes"
-        case ..<0.96: return "static:knock"
+        case ..<0.30: return "static:smile-closed"
+        case ..<0.52: return "static:confident"
+        case ..<0.74: return "static:notes"
+        case ..<0.92: return "static:knock"
         default: return "waving"
         }
     }
@@ -204,11 +209,8 @@ struct IdleBehavior {
         let bounds = roamingRect
         var destination = currentOrigin
         for _ in 0..<6 {
-            // Leave some room for a gentle vertical float where the display
-            // allows it. Final clamping also handles tiny or edge-bound areas.
-            let verticalInset = min(4, bounds.height / 2)
             destination = CGPoint(x: random.value(Double(bounds.minX), Double(bounds.maxX)),
-                                  y: random.value(Double(bounds.minY + verticalInset), Double(bounds.maxY - verticalInset)))
+                                  y: random.value(Double(bounds.minY), Double(bounds.maxY)))
             if distance(currentOrigin, destination) >= 18 { break }
         }
         let length = distance(currentOrigin, destination)
@@ -218,18 +220,16 @@ struct IdleBehavior {
         }
         let duration = min(6, max(2, Double(length) / random.value(25, 40)))
         journey = Journey(from: currentOrigin, to: destination, startedAt: now,
-                          duration: duration, frequency: random.value(1.25, 1.65),
-                          amplitude: CGFloat(random.value(3, 4)))
+                          duration: duration)
     }
 
     private func position(on journey: Journey, progress: Double) -> CGPoint {
         let eased = progress * progress * (3 - 2 * progress)
-        // Squaring the envelope gives zero displacement and velocity at both
-        // ends, avoiding a visible step when the standing cutout stops.
-        let envelope = pow(sin(.pi * progress), 2)
-        let bob = journey.amplitude * CGFloat(sin(2 * .pi * journey.frequency * journey.duration * progress) * envelope)
+        // The portrait renderer supplies fixed-foot breathing and spring.
+        // The window itself follows only this gentle eased path, without a
+        // second vertical oscillation that would make the whole pet float.
         let point = CGPoint(x: journey.from.x + (journey.to.x - journey.from.x) * eased,
-                            y: journey.from.y + (journey.to.y - journey.from.y) * eased + bob)
+                            y: journey.from.y + (journey.to.y - journey.from.y) * eased)
         return clamp(point, to: roamingRect)
     }
 
@@ -267,7 +267,7 @@ struct IdleBehavior {
         var sawMove = false
         var sawPose = false
         var neutralFrames = 0
-        let permitted = Set(["idle", "static:smile", "static:smile-closed", "static:confident", "static:notes", "static:knock", "waving"])
+        let permitted = Set(["idle", "static:smile-closed", "static:confident", "static:notes", "static:knock", "waving"])
         for step in 1...14_400 {
             let now = Double(step) / 24
             let output = behavior.update(now: now, eligible: true, posesEnabled: true,
@@ -301,35 +301,88 @@ struct IdleBehavior {
             try require(a.origin == b.origin && a.pose == b.pose, "Seeded behavior is not reproducible")
         }
 
-        // Exercise actual journeys' endpoints and the internal bob envelope.
+        // A stroll must ease between its endpoints without adding an unrelated
+        // window bounce; body elasticity belongs to the portrait renderer.
         let journey = Journey(from: CGPoint(x: 0, y: 50), to: CGPoint(x: 100, y: 60),
-                              startedAt: 0, duration: 4, frequency: 1.45, amplitude: 3.5)
+                              startedAt: 0, duration: 4)
         try require(behavior.distance(behavior.position(on: journey, progress: 0), journey.from) < 0.0001,
-                    "Movement starts with a bob offset")
+                    "Movement starts away from its visible location")
         try require(behavior.distance(behavior.position(on: journey, progress: 1), journey.to) < 0.0001,
-                    "Movement ends with a bob offset")
-        var sawBob = false
+                    "Movement does not settle at its destination")
+        var previous = journey.from
         for step in 1..<100 {
             let progress = Double(step) / 100
-            let eased = progress * progress * (3 - 2 * progress)
-            let baseline = journey.from.y + (journey.to.y - journey.from.y) * eased
-            let displacement = abs(behavior.position(on: journey, progress: progress).y - baseline)
-            try require(displacement <= 4.0001, "The vertical float exceeded its gentle amplitude")
-            if displacement > 1 { sawBob = true }
+            let point = behavior.position(on: journey, progress: progress)
+            try require(point.x >= previous.x && point.y >= previous.y,
+                        "A simple stroll reverses vertically or horizontally")
+            try require(point.x <= journey.to.x && point.y <= journey.to.y,
+                        "A stroll overshoots its destination")
+            previous = point
         }
-        try require(sawBob, "Movement has no visible vertical float")
 
-        // Ineligible / hover / reduced-motion updates cannot override the app's
-        // task expression, and resuming cannot snap the window to its anchor.
+        // Ineligible / reduced-motion updates cannot override the app's task
+        // expression, and resuming cannot snap the window to its anchor.
         let before = behavior.currentOrigin
         let blocked = behavior.update(now: 600.05, eligible: false, posesEnabled: true, wanderingEnabled: true, reduceMotion: false, pointerNear: false)
         try require(blocked.origin == nil && blocked.pose == nil && behavior.currentOrigin == before, "Busy state emitted an idle action")
         let resumed = behavior.update(now: 600.10, eligible: true, posesEnabled: true, wanderingEnabled: true, reduceMotion: false, pointerNear: false)
         try require(resumed.origin == nil && resumed.pose == "idle" && behavior.currentOrigin == before, "Resuming idle snapped the character")
-        for (motion, hover) in [(true, false), (false, true)] {
-            let output = behavior.update(now: 600.15, eligible: true, posesEnabled: true, wanderingEnabled: true, reduceMotion: motion, pointerNear: hover)
-            try require(output.origin == nil && output.pose == nil && behavior.currentOrigin == before, "Reduced motion or pointer proximity did not suspend idle")
+        let reduced = behavior.update(now: 600.15, eligible: true, posesEnabled: true,
+                                      wanderingEnabled: true, reduceMotion: true, pointerNear: false)
+        try require(reduced.origin == nil && reduced.pose == nil && behavior.currentOrigin == before,
+                    "Reduced motion did not suspend idle")
+
+        // Pointer proximity may stop the window, but must never starve the
+        // expression clock. Without strolling, the exact pose schedule should
+        // match whether the pointer stays near, passes every four seconds, or
+        // stays away entirely.
+        var away = IdleBehavior(seed: 42)
+        var near = IdleBehavior(seed: 42)
+        var passing = IdleBehavior(seed: 42)
+        away.reset(now: 0, origin: home, allowedRect: legal)
+        near.reset(now: 0, origin: home, allowedRect: legal)
+        passing.reset(now: 0, origin: home, allowedRect: legal)
+        var hoverPoses = 0
+        for tick in 0...2_880 {
+            let now = Double(tick) / 24
+            let a = away.update(now: now, eligible: true, posesEnabled: true,
+                                wanderingEnabled: false, reduceMotion: false, pointerNear: false)
+            let n = near.update(now: now, eligible: true, posesEnabled: true,
+                                wanderingEnabled: false, reduceMotion: false, pointerNear: true)
+            let p = passing.update(now: now, eligible: true, posesEnabled: true,
+                                   wanderingEnabled: false, reduceMotion: false, pointerNear: tick % 96 == 0)
+            try require(n.pose == a.pose && p.pose == a.pose, "Hover restarted or starved the expression schedule")
+            try require(n.origin == nil && p.origin == nil, "A nearby pointer moved the window")
+            if let pose = n.pose, pose != "idle" { hoverPoses += 1 }
         }
+        try require(hoverPoses >= 8, "Hovering did not show regular visible expressions")
+
+        // With roaming enabled, a long hover still shows expressions, never
+        // moves, and leaves at least two seconds to grab the pet after leaving.
+        var hovering = IdleBehavior(seed: 19)
+        hovering.reset(now: 0, origin: home, allowedRect: legal)
+        var roamingHoverPoses = 0
+        for tick in 0...2_880 {
+            let output = hovering.update(now: Double(tick) / 24, eligible: true, posesEnabled: true,
+                                         wanderingEnabled: true, reduceMotion: false, pointerNear: true)
+            try require(output.origin == nil && hovering.currentOrigin == home,
+                        "A stroll continued under the pointer")
+            if let pose = output.pose, pose != "idle" { roamingHoverPoses += 1 }
+        }
+        try require(roamingHoverPoses >= 8, "Roaming mode starved expressions while hovered")
+        for tick in 1...48 {
+            let output = hovering.update(now: 120 + Double(tick) / 24, eligible: true, posesEnabled: true,
+                                         wanderingEnabled: true, reduceMotion: false, pointerNear: false)
+            try require(output.origin == nil, "The window moved before its two-second pointer grace period")
+        }
+        var resumedWalking = false
+        for tick in 49...1_440 {
+            let output = hovering.update(now: 120 + Double(tick) / 24, eligible: true, posesEnabled: true,
+                                         wanderingEnabled: true, reduceMotion: false, pointerNear: false)
+            if output.origin != nil { resumedWalking = true }
+        }
+        try require(resumedWalking && hovering.anchor == home,
+                    "Leaving the pointer did not resume local roaming from the same anchor")
 
         // Jump forward while actually walking: do not catch up to a destination.
         var sleeping = IdleBehavior(seed: 8)

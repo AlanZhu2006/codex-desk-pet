@@ -73,6 +73,9 @@ private final class PetView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+        // This transparent view repaints continuously. Clear the previous
+        // frame before source-over drawing, including translucent edge pixels.
+        NSGraphicsContext.current?.cgContext.clear(dirtyRect)
         sprite?.image.draw(in: spriteRect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high])
         guard let bubble, !bubble.isEmpty else { return }
         let rect = NSRect(x: 8, y: spriteHeight + 7, width: bounds.width - 16, height: 29)
@@ -115,6 +118,8 @@ final class PetController: NSObject, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private var timer: Timer?
     private var expressions: [String: PetFrame] = [:]
+    private var originalArtwork: [String: CGImage] = [:]
+    private var brightness = PortraitBrightness.bright
     private var currentAnimation = "idle"
     private var currentPortrait = "smile"
     private var motion = PortraitMotion()
@@ -133,7 +138,7 @@ final class PetController: NSObject, NSMenuDelegate {
     private var currentSize: CGFloat = 112
     private var idleBehavior = IdleBehavior()
     private var idleExpressionsEnabled = true
-    private var idleWanderingEnabled = false
+    private var idleWanderingEnabled = true
     private var statusBubblesEnabled = false
     private var menuOpen = false
 
@@ -150,6 +155,7 @@ final class PetController: NSObject, NSMenuDelegate {
         panel = PetPanel(contentRect: petView.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         super.init()
         precondition(Thread.isMainThread)
+        brightness = PortraitBrightness(rawValue: defaults.string(forKey: "portraitBrightness") ?? "") ?? .bright
         loadArtwork()
         configurePanel()
         configureInteraction()
@@ -170,7 +176,13 @@ final class PetController: NSObject, NSMenuDelegate {
         }
         paused = defaults.bool(forKey: "petPaused")
         idleExpressionsEnabled = defaults.object(forKey: "idleExpressions") == nil ? true : defaults.bool(forKey: "idleExpressions")
-        idleWanderingEnabled = defaults.bool(forKey: "videoStyleWandering")
+        if defaults.object(forKey: "videoStyleWandering") != nil {
+            idleWanderingEnabled = defaults.bool(forKey: "videoStyleWandering")
+        } else {
+            // Preserve the previous version's explicit roam preference.
+            idleWanderingEnabled = defaults.object(forKey: "idleWandering") == nil ? true : defaults.bool(forKey: "idleWandering")
+            defaults.set(idleWanderingEnabled, forKey: "videoStyleWandering")
+        }
         statusBubblesEnabled = defaults.bool(forKey: "statusBubbles")
         staysOnTop = defaults.object(forKey: "petOnTop") == nil ? true : defaults.bool(forKey: "petOnTop")
         resizePet(to: currentSize, persist: false)
@@ -283,8 +295,11 @@ final class PetController: NSObject, NSMenuDelegate {
 
     private func loadArtwork() {
         for (name, _) in expressionOptions {
-            if let image = Self.readImage(resources.appendingPathComponent("sprites/\(name).png")) {
-                expressions[name] = PetFrame(image)
+            if originalArtwork[name] == nil {
+                originalArtwork[name] = Self.readImage(resources.appendingPathComponent("sprites/\(name).png"))
+            }
+            if let image = originalArtwork[name] {
+                expressions[name] = PetFrame(PortraitColor.adjusted(image, brightness: brightness))
             }
         }
     }
@@ -408,9 +423,33 @@ final class PetController: NSObject, NSMenuDelegate {
         view.scaleY = 1.13
         try require(view.spriteRect.minY == baseline, "表情变形必须固定脚底")
         try require(view.spriteRect.maxY <= view.spriteHeight, "拉伸时不应裁切头部")
+        // Repainting a transparent portrait must not accumulate old alpha or
+        // leave a previous expression underneath it.
+        guard let paint = CGContext(data: nil, width: 248, height: 252, bitsPerComponent: 8,
+                                    bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            throw NSError(domain: "ClaudeDeskPet.SelfTest", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "无法创建透明重绘测试画布"])
+        }
+        paint.scaleBy(x: 2, y: 2)
+        func paintedSnapshot() throws -> Data {
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(cgContext: paint, flipped: false)
+            view.draw(view.bounds)
+            NSGraphicsContext.restoreGraphicsState()
+            guard let data = paint.makeImage()?.dataProvider?.data else {
+                throw NSError(domain: "ClaudeDeskPet.SelfTest", code: 1,
+                              userInfo: [NSLocalizedDescriptionKey: "无法读取透明重绘像素"])
+            }
+            return Data(bytes: CFDataGetBytePtr(data)!, count: CFDataGetLength(data))
+        }
+        let firstPaint = try paintedSnapshot()
+        let secondPaint = try paintedSnapshot()
+        try require(firstPaint == secondPaint, "重复绘制不得叠加透明度或加深颜色")
         try IdleBehavior.selfTest()
         try PortraitMotion.selfTest()
         try PetPressTracker.selfTest()
+        try PortraitColor.selfTest()
     }
 
     private func applyAutomaticState(_ state: String) {
@@ -495,6 +534,7 @@ final class PetController: NSObject, NSMenuDelegate {
             manualExpression = nil
             applyAutomaticState(lastActivityState)
         }
+        let wasWandering = idleBehavior.isWandering
         let idle = idleBehavior.update(now: now,
                                        eligible: lastActivityState == "idle" && manualExpression == nil && !pressTracker.isPressed && !paused && !isHidden && !menuOpen,
                                        posesEnabled: idleExpressionsEnabled,
@@ -502,6 +542,9 @@ final class PetController: NSObject, NSMenuDelegate {
                                        reduceMotion: reduceMotion,
                                        pointerNear: pointerNearPet())
         if let origin = idle.origin { panel.setFrameOrigin(origin) }
+        if !wasWandering && idleBehavior.isWandering && !paused {
+            motion.expressionChanged(at: animationTime)
+        }
         if let pose = idle.pose {
             if pose.hasPrefix("static:") { showPortrait(String(pose.dropFirst(7))) }
             else { setAnimation(pose) }
@@ -579,6 +622,18 @@ final class PetController: NSObject, NSMenuDelegate {
         expressionItem.submenu = expressionMenu
         menu.addItem(expressionItem)
 
+        let brightnessItem = NSMenuItem(title: "亮度", action: nil, keyEquivalent: "")
+        let brightnessMenu = NSMenu()
+        for value in PortraitBrightness.allCases {
+            let item = NSMenuItem(title: value.title, action: #selector(selectBrightness(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = value.rawValue
+            item.state = value == brightness ? .on : .off
+            brightnessMenu.addItem(item)
+        }
+        brightnessItem.submenu = brightnessMenu
+        menu.addItem(brightnessItem)
+
         let sizeItem = NSMenuItem(title: "角色大小", action: nil, keyEquivalent: "")
         let sizeMenu = NSMenu()
         for (label, height) in [("小", 88), ("与 Codex 相同", 112), ("大", 160)] {
@@ -648,6 +703,16 @@ final class PetController: NSObject, NSMenuDelegate {
     @objc private func selectSize(_ sender: NSMenuItem) {
         guard let height = sender.representedObject as? Int else { return }
         resizePet(to: CGFloat(height), persist: true)
+    }
+
+    @objc private func selectBrightness(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let value = PortraitBrightness(rawValue: raw) else { return }
+        brightness = value
+        defaults.set(value.rawValue, forKey: "portraitBrightness")
+        loadArtwork()
+        // Brightness changes do not reset the chosen expression or its motion.
+        petView.sprite = expressions[currentPortrait]
     }
 
     @objc private func toggleIdleExpressions() {
