@@ -38,7 +38,11 @@ private final class PetView: NSView {
     var cellWidth: CGFloat = 112
     var scaleX: CGFloat = 1 { didSet { if oldValue != scaleX { needsDisplay = true } } }
     var scaleY: CGFloat = 1 { didSet { if oldValue != scaleY { needsDisplay = true } } }
+    var offsetX: CGFloat = 0 { didSet { if oldValue != offsetX { needsDisplay = true } } }
+    var offsetY: CGFloat = 0 { didSet { if oldValue != offsetY { needsDisplay = true } } }
     var spriteHeight: CGFloat { cellWidth * 208 / 192 }
+    var jumpHeadroom: CGFloat { cellWidth * 24 / 192 }
+    var cellRect: NSRect { NSRect(x: (bounds.width - cellWidth) / 2, y: 0, width: cellWidth, height: spriteHeight) }
     var bubble: String? { didSet { needsDisplay = true } }
     var onMouseDown: ((NSEvent) -> Void)?
     var onMouseDragged: ((NSEvent) -> Void)?
@@ -49,22 +53,38 @@ private final class PetView: NSView {
     override var isOpaque: Bool { false }
     override var acceptsFirstResponder: Bool { false }
 
-    var spriteRect: NSRect {
+    var restingSpriteRect: NSRect {
         guard let sprite else { return .zero }
         let size = sprite.image.size
         // The same composition as the Codex atlas: 170px portrait height,
         // foot at y=202 in a 192x208 cell. Draw the original 400px artwork
         // directly so Retina downsamples it instead of enlarging an atlas crop.
         let scale = (170 / max(size.height, 1)) * cellWidth / 192
-        let width = size.width * scale * scaleX
-        let height = size.height * scale * scaleY
+        let width = size.width * scale
+        let height = size.height * scale
         return NSRect(x: (bounds.width - width) / 2, y: 6 * cellWidth / 192,
                       width: width, height: height)
     }
 
+    var spriteRect: NSRect {
+        let resting = restingSpriteRect
+        let unit = cellWidth / 192
+        let width = resting.width * scaleX
+        return NSRect(x: resting.midX - width / 2 + offsetX * unit,
+                      y: resting.minY + offsetY * unit,
+                      width: width, height: resting.height * scaleY)
+    }
+
     func containsVisiblePixel(at point: NSPoint) -> Bool {
-        guard let sprite, spriteRect.contains(point) else { return false }
-        let rect = spriteRect
+        containsVisiblePixel(at: point, in: spriteRect)
+    }
+
+    func containsRestingPixel(at point: NSPoint) -> Bool {
+        containsVisiblePixel(at: point, in: restingSpriteRect)
+    }
+
+    private func containsVisiblePixel(at point: NSPoint, in rect: NSRect) -> Bool {
+        guard let sprite, rect.width > 0, rect.height > 0, rect.contains(point) else { return false }
         let x = min(sprite.pixels.pixelsWide - 1, max(0, Int((point.x - rect.minX) / rect.width * CGFloat(sprite.pixels.pixelsWide))))
         // Bitmap rows start at the top; AppKit view coordinates start at the bottom.
         let y = min(sprite.pixels.pixelsHigh - 1, max(0, Int((rect.maxY - point.y) / rect.height * CGFloat(sprite.pixels.pixelsHigh))))
@@ -78,7 +98,7 @@ private final class PetView: NSView {
         NSGraphicsContext.current?.cgContext.clear(dirtyRect)
         sprite?.image.draw(in: spriteRect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high])
         guard let bubble, !bubble.isEmpty else { return }
-        let rect = NSRect(x: 8, y: spriteHeight + 7, width: bounds.width - 16, height: 29)
+        let rect = NSRect(x: 8, y: spriteHeight + jumpHeadroom + 7, width: bounds.width - 16, height: 29)
         NSColor(calibratedWhite: 0.99, alpha: 0.95).setFill()
         NSBezierPath(roundedRect: rect, xRadius: 12, yRadius: 12).fill()
         NSColor(calibratedRed: 0.87, green: 0.68, blue: 0.46, alpha: 0.65).setStroke()
@@ -123,6 +143,7 @@ final class PetController: NSObject, NSMenuDelegate {
     private var currentAnimation = "idle"
     private var currentPortrait = "smile"
     private var motion = PortraitMotion()
+    private var hoverTracker = PetHoverTracker()
     private var animationTime: TimeInterval = 0
     private var lastTickTime: TimeInterval = ProcessInfo.processInfo.systemUptime
     private var bubbleUntil: TimeInterval = 0
@@ -151,7 +172,7 @@ final class PetController: NSObject, NSMenuDelegate {
 
     init(resources: URL) {
         self.resources = resources
-        petView = PetView(frame: NSRect(x: 0, y: 0, width: 124, height: 126))
+        petView = PetView(frame: NSRect(x: 0, y: 0, width: 124, height: 140))
         panel = PetPanel(contentRect: petView.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         super.init()
         precondition(Thread.isMainThread)
@@ -238,6 +259,8 @@ final class PetController: NSObject, NSMenuDelegate {
     private func configureInteraction() {
         petView.onMouseDown = { [weak self] event in
             guard let self else { return }
+            self.motion.cancelHover()
+            self.updatePortraitMotion()
             self.dragMouseOrigin = NSEvent.mouseLocation
             self.dragWindowOrigin = self.panel.frame.origin
             self.pressTracker.begin(at: self.dragMouseOrigin)
@@ -274,9 +297,16 @@ final class PetController: NSObject, NSMenuDelegate {
             guard let self else { return }
             if self.pressTracker.isDragging { self.savePosition(); self.resetIdleBehavior() }
             self.pressTracker.cancel()
+            self.motion.cancelHover()
+            self.updatePortraitMotion()
+            self.menuOpen = true
+            defer { self.menuOpen = false }
             NSMenu.popUpContextMenu(self.menu, with: event, for: self.petView)
         }
-        petView.onActivate = { [weak self] in self?.cycleExpression() }
+        petView.onActivate = { [weak self] in
+            self?.motion.cancelHover()
+            self?.cycleExpression()
+        }
     }
 
     private static func readImage(_ url: URL) -> CGImage? {
@@ -395,7 +425,7 @@ final class PetController: NSObject, NSMenuDelegate {
         // Exercise the real hit-testing transform at both a transparent corner
         // and an opaque character pixel, including the bitmap/view Y inversion.
         guard let idleImage = readImage(resources.appendingPathComponent("sprites/smile.png")) else { return }
-        let view = PetView(frame: NSRect(x: 0, y: 0, width: 124, height: 126))
+        let view = PetView(frame: NSRect(x: 0, y: 0, width: 124, height: 140))
         view.cellWidth = 112
         view.sprite = PetFrame(idleImage)
         let pixels = view.sprite!.pixels
@@ -423,9 +453,28 @@ final class PetController: NSObject, NSMenuDelegate {
         view.scaleY = 1.13
         try require(view.spriteRect.minY == baseline, "表情变形必须固定脚底")
         try require(view.spriteRect.maxY <= view.spriteHeight, "拉伸时不应裁切头部")
+        view.offsetY = 24
+        view.offsetX = 4
+        try require(view.spriteRect.maxY < view.bounds.maxY, "悬停跳跃叠加表情动效不应裁切头部")
+        try require(view.spriteRect.minX > 0 && view.spriteRect.maxX < view.bounds.maxX, "动态偏移不应裁切身体")
+        let airborneRect = view.spriteRect
+        var checkedAirborneHead = false
+        for y in 0..<min(80, pixels.pixelsHigh) {
+            for x in 0..<pixels.pixelsWide where (pixels.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.9 {
+                let point = NSPoint(x: airborneRect.minX + (CGFloat(x) + 0.5) / CGFloat(pixels.pixelsWide) * airborneRect.width,
+                                    y: airborneRect.maxY - (CGFloat(y) + 0.5) / CGFloat(pixels.pixelsHigh) * airborneRect.height)
+                if point.y > view.restingSpriteRect.maxY {
+                    try require(view.containsVisiblePixel(at: point), "跳起后的头部也必须可点击")
+                    checkedAirborneHead = true
+                    break
+                }
+            }
+            if checkedAirborneHead { break }
+        }
+        try require(checkedAirborneHead, "未检查跳起位置的实际命中")
         // Repainting a transparent portrait must not accumulate old alpha or
         // leave a previous expression underneath it.
-        guard let paint = CGContext(data: nil, width: 248, height: 252, bitsPerComponent: 8,
+        guard let paint = CGContext(data: nil, width: 248, height: 280, bitsPerComponent: 8,
                                     bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
             throw NSError(domain: "ClaudeDeskPet.SelfTest", code: 1,
@@ -449,6 +498,7 @@ final class PetController: NSObject, NSMenuDelegate {
         try IdleBehavior.selfTest()
         try PortraitMotion.selfTest()
         try PetPressTracker.selfTest()
+        try PetHoverTracker.selfTest()
         try PortraitColor.selfTest()
     }
 
@@ -514,6 +564,8 @@ final class PetController: NSObject, NSMenuDelegate {
                                   reducedMotion: paused || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         petView.scaleX = shape.scaleX
         petView.scaleY = shape.scaleY
+        petView.offsetX = shape.offsetX
+        petView.offsetY = shape.offsetY
     }
 
     private func showBubble(_ message: String, seconds: TimeInterval) {
@@ -529,6 +581,7 @@ final class PetController: NSObject, NSMenuDelegate {
         lastTickTime = now
         let mayAnimate = !pressTracker.isPressed || pressTracker.isDragging
         if !paused && !isHidden && !reduceMotion && mayAnimate && !menuOpen { animationTime += delta }
+        updateHover(reducedMotion: reduceMotion)
         if let deadline = manualUntil, now >= deadline && !pressTracker.isPressed && !menuOpen {
             manualUntil = nil
             manualExpression = nil
@@ -557,7 +610,26 @@ final class PetController: NSObject, NSMenuDelegate {
     private func pointerNearPet() -> Bool {
         let windowPoint = panel.convertPoint(fromScreen: NSEvent.mouseLocation)
         let point = petView.convert(windowPoint, from: nil)
-        return petView.spriteRect.insetBy(dx: -16, dy: -16).contains(point)
+        return petView.cellRect.insetBy(dx: -16, dy: -16).contains(point)
+    }
+
+    private func updateHover(reducedMotion: Bool) {
+        if reducedMotion || isHidden { motion.cancelHover() }
+        let point = petView.convert(panel.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
+        let inside: Bool
+        if isHidden { inside = false }
+        else if hoverTracker.isInside {
+            // This zone is fixed to the cell, not to the airborne portrait.
+            // A jump therefore cannot manufacture its own leave/re-enter.
+            let margin = max(8, currentSize * 16 / 192)
+            inside = petView.cellRect.insetBy(dx: -margin, dy: -margin).contains(point)
+        } else {
+            inside = petView.containsRestingPixel(at: point)
+        }
+        let eligible = !paused && !isHidden && !reducedMotion && !menuOpen && !pressTracker.isPressed
+        if hoverTracker.update(isInside: inside, eligible: eligible) {
+            _ = motion.hoverEntered(at: animationTime)
+        }
     }
 
     private func idleAllowedRect() -> CGRect {
@@ -578,7 +650,11 @@ final class PetController: NSObject, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) {
-        if menu === self.menu { menuOpen = true }
+        if menu === self.menu {
+            menuOpen = true
+            motion.cancelHover()
+            updatePortraitMotion()
+        }
     }
 
     func menuDidClose(_ menu: NSMenu) {
@@ -591,7 +667,11 @@ final class PetController: NSObject, NSMenuDelegate {
         let screenPoint = NSEvent.mouseLocation
         let windowPoint = panel.convertPoint(fromScreen: screenPoint)
         let viewPoint = petView.convert(windowPoint, from: nil)
-        panel.ignoresMouseEvents = !petView.containsVisiblePixel(at: viewPoint)
+        let visible = petView.containsVisiblePixel(at: viewPoint)
+        // Preserve the original opaque silhouette during the short jump, so
+        // clicking a foot as it lifts does not fall through to another app.
+        let restingDuringJump = motion.isHoverJumping(at: animationTime) && petView.containsRestingPixel(at: viewPoint)
+        panel.ignoresMouseEvents = !(visible || restingDuringJump)
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -739,7 +819,7 @@ final class PetController: NSObject, NSMenuDelegate {
         let previous = panel.frame
         currentSize = width
         let size = NSSize(width: statusBubblesEnabled ? max(188, width + 12) : width + 12,
-                          height: width * 208 / 192 + (statusBubblesEnabled ? 44 : 4))
+                          height: width * (208 + 24) / 192 + (statusBubblesEnabled ? 44 : 4))
         petView.cellWidth = width
         var origin = NSPoint(x: previous.midX - size.width / 2, y: previous.minY)
         origin = clampedOrigin(origin, size: size)
@@ -756,6 +836,7 @@ final class PetController: NSObject, NSMenuDelegate {
     @objc private func togglePause() {
         paused.toggle()
         defaults.set(paused, forKey: "petPaused")
+        if paused { motion.cancelHover(); updatePortraitMotion() }
     }
 
     @objc private func toggleOnTop() {
