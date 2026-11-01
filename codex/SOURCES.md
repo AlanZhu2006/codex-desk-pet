@@ -1,0 +1,24 @@
+# 素材来源与制作记录
+
+## 原角色与已有立绘
+
+- 上游仓库：[BingXing-ai/claude-desk-pet](https://github.com/BingXing-ai/claude-desk-pet)，本次基于提交 `0784c254f9dead6d000dc5717a36ce19992f8c8d`。
+- 原仓库的十张 PNG 保持原样。Codex 动画以 `pet/sprites/smile.png` 为人物身份参考，并参考 `typing.png` 与 `notes.png` 的工作动作。
+- 上游 README 说明立绘由作者通过 AI 绘图生成，用于其视频。这里保留原有署名和来源；角色为粉丝创作，与 Anthropic、OpenAI 官方无关。
+
+## 大哭表情
+
+- 参考视频：[冰姓苦力怕《让Claude72小时重写Linux》](https://www.bilibili.com/video/BV1NSnF6aE76/)。参考时间约 01:31.5，画面裁切区域为 `x=520, y=420, width=440, height=560`（原视频 1920×1080）。
+- 截至 2026-11-01，未在作者公开仓库找到这一表情的原始透明 PNG。此处不将截图或重绘标为作者原始文件，也不声称已核实该表情的具体原始绘制者。
+- 本 fork 使用内置 imagegen，根据该画面进行透明背景提取与 AI 重绘，得到 `pet/sprites/crying.png`（RGBA，高 400 像素，与原立绘一致）。重绘可能与视频中的细节有差异。
+- Codex 的 `failed` 行另行参考此图生成连续哭泣动作，并匹配原角色造型。
+
+## Codex 动画
+
+使用内置 imagegen 生成各状态的水平连续帧，再做透明背景清理、帧提取、尺寸统一与 WebP 图集拼装；没有将少量静态立绘平铺冒充所有动作。左、右移动分别生成，以保留发饰和服装的非对称细节。
+
+生成提示词保存在 [prompts](prompts/)；其中 `crying-cutout.md` 为大哭图的生成指令，其他文件为各行动画的生成指令。图片生成的输入包括原角色图、对应行的布局参考，以及部分状态的表情参考。
+
+图集采用 Codex 原生 v1 格式，9 行共 57 帧；行数、帧数、时长记录在 [animation.json](animation.json)。机器校验结果见 [validation.json](validation.json)。最终还检查透明边缘、完整身体、动作语义和动画循环。
+
+代码沿用仓库 MIT 许可证。第三方角色与参考素材的署名、权利仍归各自权利人；这份来源记录不额外授予第三方素材许可。

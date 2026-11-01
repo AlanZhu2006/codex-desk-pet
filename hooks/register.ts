@@ -9,7 +9,7 @@ type Totals = {
 }
 
 // 桌宠的状态（悬浮窗程序按这个名字换表情）
-type PetState = 'thinking' | 'tool' | 'reading' | 'waiting' | 'celebrate' | 'error' | 'aborted' | 'stone'
+type PetState = 'thinking' | 'tool' | 'reading' | 'waiting' | 'celebrate' | 'error' | 'crying' | 'aborted' | 'stone'
 
 type ProjectTotals = Totals & { costUsd: number; sessions: number }
 
@@ -227,7 +227,9 @@ export const register: Register = on => {
 
     if (e.reason === 'aborted') {
       await pet($, 'aborted', '被打断了…')
-    } else if (e.reason === 'error' || e.reason === 'refusal') {
+    } else if (e.reason === 'error') {
+      await pet($, 'crying', '出错了，来看看？', 'error')
+    } else if (e.reason === 'refusal') {
       await pet($, 'error', '出错了，来看看？', 'error')
     } else if (e.durationMs > 180_000) {
       // 干了 3 分钟以上的大活：撒花

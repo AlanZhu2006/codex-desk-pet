@@ -43,6 +43,7 @@ SPRITES = {
     'celebrate': 'confetti',
     'idle': 'smile',
     'error': 'panic',
+    'crying': 'crying',
     'aborted': 'guilty',
     'stone': 'stone',
 }

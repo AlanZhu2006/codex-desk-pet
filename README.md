@@ -2,6 +2,8 @@
 
 一个给 [Claude Code](https://claude.com/claude-code) 用的小插件：Claude 干活的时候，桌面上会有一个 Q 版 Claude 娘陪着你，实时显示它在做什么。
 
+本 fork 新增 **Codex 原生桌宠**和**大哭表情**。Codex 用户可以直接安装动画素材包，支持 macOS / Windows，无需运行原版 Windows 悬浮窗。详见 [Codex 安装与动画预览](codex/README.md)。
+
 ![六种状态预览](docs/preview.png)
 
 ## 功能
@@ -15,6 +17,7 @@
 | 读文件、搜索、上网查 | 捧着书记笔记 |
 | 回复完，等你说话 | 敲门："轮到你啦！" |
 | 出错 | 慌张冒汗 |
+| 整轮任务因错误结束 | 双手握拳、泪流满面大哭 |
 | 被你打断 | 心虚 |
 | 干了 3 分钟以上的大活 | 撒花庆祝 🎉 |
 | 等你超过 10 分钟 | 开始发呆 zZ |
@@ -37,7 +40,9 @@
 
 ## 运行要求
 
-> 🍎 **macOS 用户**：这个仓库目前只支持 Windows，请使用 [wangmeng003](https://github.com/wangmeng003) 维护的 Mac 移植版：[claude-desk-pet-mac](https://github.com/wangmeng003/claude-desk-pet-mac)
+> **Codex 用户**：使用本 fork 的 [Codex 原生桌宠](codex/README.md)，不需要下述 Python 窗口程序。
+>
+> 🍎 **Claude Code 的 macOS 用户**：原版悬浮窗只支持 Windows，请使用 [wangmeng003](https://github.com/wangmeng003) 维护的 Mac 移植版：[claude-desk-pet-mac](https://github.com/wangmeng003/claude-desk-pet-mac)
 
 - **Windows**（悬浮窗和提示音用的是 Windows 的接口）
 - **Python 3**，并且在命令行里输入 `python` 能直接运行
@@ -52,7 +57,7 @@ pip install pillow
 **在终端里的 Claude Code**，输入：
 
 ```
-/plugin install desk-pet --marketplace BingXing-ai/claude-desk-pet
+/plugin install desk-pet --marketplace AlanZhu2006/claude-desk-pet
 ```
 
 然后按 `y` 添加插件市场，选择 user（用户）范围，按回车确认。
@@ -60,10 +65,10 @@ pip install pillow
 **也可以在命令行里运行：**
 
 ```bash
-claude plugin install desk-pet --marketplace BingXing-ai/claude-desk-pet
+claude plugin install desk-pet --marketplace AlanZhu2006/claude-desk-pet
 ```
 
-**在 Claude 桌面端**：点输入框旁边的 **+** → **Plugins** → **Add marketplace**，填入 `BingXing-ai/claude-desk-pet`，再点 **Add plugin**。
+**在 Claude 桌面端**：点输入框旁边的 **+** → **Plugins** → **Add marketplace**，填入 `AlanZhu2006/claude-desk-pet`，再点 **Add plugin**。
 
 装好后，新开一个会话，桌宠就会出现在屏幕右下角。
 
@@ -78,6 +83,8 @@ claude plugin install desk-pet --marketplace BingXing-ai/claude-desk-pet
 ## 说明
 
 - 这是个人粉丝作品，与 Anthropic 官方无关
+- 本 fork 基于 [冰姓苦力怕 / BingXing-ai 的原仓库](https://github.com/BingXing-ai/claude-desk-pet)
 - 立绘由作者用 AI 绘图生成，最初是为自己的视频做的素材
+- 本 fork 的大哭图与 Codex 动画为参考已有立绘和视频画面制作的 AI 衍生重绘，具体来源、生成提示词和验证见 [素材记录](codex/SOURCES.md)；并非作者原始大哭 PNG
 - 代码使用 MIT 许可证，详见 [LICENSE](LICENSE)
 - 感谢 [wangmeng003](https://github.com/wangmeng003) 移植了 [macOS 版](https://github.com/wangmeng003/claude-desk-pet-mac)
