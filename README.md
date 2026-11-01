@@ -2,7 +2,7 @@
 
 一个给 [Claude Code](https://claude.com/claude-code) 用的小插件：Claude 干活的时候，桌面上会有一个 Q 版 Claude 娘陪着你，实时显示它在做什么。
 
-本 fork 新增 **Codex 原生桌宠**和**大哭表情**。Codex 用户可以直接安装动画素材包，支持 macOS / Windows，无需运行原版 Windows 悬浮窗。详见 [Codex 安装与动画预览](codex/README.md)。
+本 fork 新增 **macOS 独立桌宠应用**、**Codex 原生桌宠素材包**和**大哭表情**。Mac 用户推荐直接运行透明悬浮的 [Claude Desktop Pet.app](macos/README.md)，支持拖动、右键切表情和跟随 Codex 任务。也可使用 [Codex 内置桌宠素材包](codex/README.md)。
 
 ![六种状态预览](docs/preview.png)
 
@@ -40,7 +40,9 @@
 
 ## 运行要求
 
-> **Codex 用户**：使用本 fork 的 [Codex 原生桌宠](codex/README.md)，不需要下述 Python 窗口程序。
+> **macOS 用户**：推荐本 fork 的 [原生独立桌宠应用](macos/README.md)，不需要下述 Python 窗口程序。
+>
+> **Codex 内置桌宠用户**：也可使用本 fork 的 [原生素材包](codex/README.md)。
 >
 > 🍎 **Claude Code 的 macOS 用户**：原版悬浮窗只支持 Windows，请使用 [wangmeng003](https://github.com/wangmeng003) 维护的 Mac 移植版：[claude-desk-pet-mac](https://github.com/wangmeng003/claude-desk-pet-mac)
 
