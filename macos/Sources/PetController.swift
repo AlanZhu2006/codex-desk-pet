@@ -117,7 +117,6 @@ final class PetController: NSObject, NSMenuDelegate {
     private var isDragging = false
     private var dragMouseOrigin = NSPoint.zero
     private var dragWindowOrigin = NSPoint.zero
-    private var dragPreviousMouseX: CGFloat = 0
     private var isHidden = false
     private var paused = false
     private var staysOnTop = true
@@ -214,18 +213,14 @@ final class PetController: NSObject, NSMenuDelegate {
             }
             self.isDragging = true
             self.dragMouseOrigin = NSEvent.mouseLocation
-            self.dragPreviousMouseX = self.dragMouseOrigin.x
             self.dragWindowOrigin = self.panel.frame.origin
             self.panel.ignoresMouseEvents = false
         }
         petView.onMouseDragged = { [weak self] _ in
             guard let self, self.isDragging else { return }
             let mouse = NSEvent.mouseLocation
-            let horizontalDelta = mouse.x - self.dragPreviousMouseX
-            self.dragPreviousMouseX = mouse.x
-            if self.manualExpression == nil && abs(horizontalDelta) > 0.3 {
-                self.setAnimation(horizontalDelta > 0 ? "running-right" : "running-left")
-            }
+            // Translate the whole cutout while preserving its current expression.
+            // Dragging does not replace a standing pose with a running gait.
             let origin = NSPoint(x: self.dragWindowOrigin.x + mouse.x - self.dragMouseOrigin.x,
                                  y: self.dragWindowOrigin.y + mouse.y - self.dragMouseOrigin.y)
             self.panel.setFrameOrigin(self.clampedOrigin(origin, size: self.panel.frame.size, preferPointerScreen: true))

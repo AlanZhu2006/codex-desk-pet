@@ -70,112 +70,112 @@
       "row": 1,
       "column": 0,
       "used": true,
-      "nontransparent_pixels": 13507
+      "nontransparent_pixels": 13791
     },
     {
       "state": "running-right",
       "row": 1,
       "column": 1,
       "used": true,
-      "nontransparent_pixels": 12753
+      "nontransparent_pixels": 13791
     },
     {
       "state": "running-right",
       "row": 1,
       "column": 2,
       "used": true,
-      "nontransparent_pixels": 12798
+      "nontransparent_pixels": 13838
     },
     {
       "state": "running-right",
       "row": 1,
       "column": 3,
       "used": true,
-      "nontransparent_pixels": 12282
+      "nontransparent_pixels": 13781
     },
     {
       "state": "running-right",
       "row": 1,
       "column": 4,
       "used": true,
-      "nontransparent_pixels": 12921
+      "nontransparent_pixels": 13877
     },
     {
       "state": "running-right",
       "row": 1,
       "column": 5,
       "used": true,
-      "nontransparent_pixels": 12969
+      "nontransparent_pixels": 13871
     },
     {
       "state": "running-right",
       "row": 1,
       "column": 6,
       "used": true,
-      "nontransparent_pixels": 13078
+      "nontransparent_pixels": 13830
     },
     {
       "state": "running-right",
       "row": 1,
       "column": 7,
       "used": true,
-      "nontransparent_pixels": 12893
+      "nontransparent_pixels": 13830
     },
     {
       "state": "running-left",
       "row": 2,
       "column": 0,
       "used": true,
-      "nontransparent_pixels": 12772
+      "nontransparent_pixels": 13791
     },
     {
       "state": "running-left",
       "row": 2,
       "column": 1,
       "used": true,
-      "nontransparent_pixels": 12140
+      "nontransparent_pixels": 13791
     },
     {
       "state": "running-left",
       "row": 2,
       "column": 2,
       "used": true,
-      "nontransparent_pixels": 12043
+      "nontransparent_pixels": 13838
     },
     {
       "state": "running-left",
       "row": 2,
       "column": 3,
       "used": true,
-      "nontransparent_pixels": 12116
+      "nontransparent_pixels": 13781
     },
     {
       "state": "running-left",
       "row": 2,
       "column": 4,
       "used": true,
-      "nontransparent_pixels": 12438
+      "nontransparent_pixels": 13877
     },
     {
       "state": "running-left",
       "row": 2,
       "column": 5,
       "used": true,
-      "nontransparent_pixels": 12199
+      "nontransparent_pixels": 13871
     },
     {
       "state": "running-left",
       "row": 2,
       "column": 6,
       "used": true,
-      "nontransparent_pixels": 12130
+      "nontransparent_pixels": 13830
     },
     {
       "state": "running-left",
       "row": 2,
       "column": 7,
       "used": true,
-      "nontransparent_pixels": 11962
+      "nontransparent_pixels": 13830
     },
     {
       "state": "waving",
@@ -515,6 +515,7 @@
     }
   ],
   "frame_count": 57,
-  "sha256": "a6179e8498661703592c1b36c7a58a064248b9de4ac0ae82b11063efafd22be3",
-  "visual_review": "9 row previews checked for complete bodies, identity, direction, motion, and transparency."
+  "sha256": "3a7bf746601f5fc8f05f6672b142993090e8d030640b4f2323e7bd75cba9e92c",
+  "motion_style": "standing-slide",
+  "visual_review": "Directional rows reuse existing standing frames; all other rows preserved."
 }

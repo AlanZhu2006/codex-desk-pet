@@ -4,6 +4,10 @@
 
 ![动画状态预览](preview.gif)
 
+左右移动采用视频里立绘整体平移的方式，保留站姿与轻微呼吸、眨眼：
+
+![站姿平移效果](movement-preview.gif)
+
 ## 安装
 
 在仓库根目录运行：
@@ -27,8 +31,8 @@ Windows 可使用 `python codex/install.py`。安装脚本仅使用 Python 标�
 | 状态 | 动作 | 帧数 |
 |---|---|---:|
 | idle | 安静站立、呼吸、眨眼 | 6 |
-| running-right | 向右移动 | 8 |
-| running-left | 向左移动 | 8 |
+| running-right | 站姿整体向右平移，轻微呼吸、眨眼 | 8 |
+| running-left | 站姿整体向左平移，轻微呼吸、眨眼 | 8 |
 | waving | 挥手 | 4 |
 | jumping | 蓄力、起跳、落地 | 5 |
 | failed | 握拳大哭、泪流变化 | 8 |
@@ -36,7 +40,7 @@ Windows 可使用 `python codex/install.py`。安装脚本仅使用 Python 标�
 | running | 专注处理任务 | 6 |
 | review | 审阅与思考 | 6 |
 
-具体触发由 Codex 决定；`running` 表示工作，左右移动由单独两行动画负责。此包采用 v1 格式，没有 v2 的鼠标方向追视。
+具体触发由 Codex 决定；`running` 表示工作。左右移动保留 Codex 要求的状态名称，但画面采用视频立绘式平移：人物面向和站姿保持一致，实际位置移动由 Codex 控制。此包采用 v1 格式，没有 v2 的鼠标方向追视。
 
 图集为透明 WebP，1536×1872，8 列×9 行，单格 192×208；各行未使用的格子全透明。状态表和帧时长见 [animation.json](animation.json)。来源与生成方式见 [SOURCES.md](SOURCES.md)。
 
