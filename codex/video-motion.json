@@ -1,0 +1,380 @@
+{
+  "sourceVideo": "https://www.bilibili.com/video/BV1NSnF6aE76/",
+  "referenceClipSeconds": [
+    6.4,
+    7.267
+  ],
+  "referenceObservation": "A complete portrait is replaced, then stretches/squashes about a fixed foot baseline. Resting motion is tiny vertical breathing, not whole-window wandering.",
+  "measurements": {
+    "videoSize": [
+      1920,
+      1080
+    ],
+    "videoFps": 30,
+    "footY": 1045,
+    "initialAtSeconds": 6.467,
+    "initialWidthHeight": [
+      234,
+      399
+    ],
+    "overshootAtSeconds": 6.667,
+    "overshootWidthHeight": [
+      275,
+      339
+    ],
+    "settledWidthHeight": [
+      261,
+      354
+    ],
+    "settlingSeconds": [
+      0.7,
+      0.9
+    ]
+  },
+  "compiler": {
+    "baseHeight": 170,
+    "footBaselineExclusiveY": 202,
+    "sourceSha256": {
+      "confident": "850f3b587ce06e4859cc4b675dff7ce73fd16c5dfa1e3cb56c2e8db089e86b09",
+      "crying": "81981ac7feb36999e685c68f142a0db5a9bd598530d3723a80d171d083e03b04",
+      "knock": "bca29064b733eb4d3e598349d353d0af446f4b4b73c80fba51647b67c24ef9bd",
+      "notes": "929636bf0513303f13379f28bcd09e47f3f1b24164f3630ab919417b76d21d53",
+      "smile": "c48ca0b60143d388839716f3c49c2b4b06a729c4ca804b83816259dde8933365",
+      "smile-closed": "f74aa0fa07ec2a38deadc47e2cc0b5a5fe70706edc90cfff904168ac05997d01",
+      "typing": "0f7808ed9538ee26240b2e3658e2182245a7cb41355e25900666005ba8d02a32"
+    },
+    "operation": "Technical resizing and packing of unchanged existing portraits; no AI redraw, leg animation, rotation or window-position code."
+  },
+  "nativeIdleLoopMs": 6600,
+  "nativeLimits": "Fixed state rows and frame timing. These assets cannot add scripts, random click cycling or autonomous window movement.",
+  "previewScope": "GIFs render the exact compiled cells. The nine-panel preview uses exact native frame durations. Hover-and-drag is an illustrative interaction sequence, not a desktop recording.",
+  "sequences": [
+    {
+      "state": "idle",
+      "sources": [
+        "smile",
+        "smile-closed",
+        "smile",
+        "confident",
+        "confident",
+        "smile"
+      ],
+      "scaleX": [
+        1.0,
+        0.987211,
+        1.006554,
+        0.956975,
+        1.016593,
+        1.0
+      ],
+      "scaleY": [
+        1.0,
+        1.02,
+        0.99,
+        1.07,
+        0.975,
+        1.0
+      ],
+      "durationMs": [
+        1680,
+        660,
+        660,
+        840,
+        840,
+        1920
+      ]
+    },
+    {
+      "state": "running-right",
+      "sources": [
+        "smile",
+        "smile",
+        "smile",
+        "smile",
+        "smile",
+        "smile",
+        "smile",
+        "smile"
+      ],
+      "scaleX": [
+        1.0,
+        0.939928,
+        0.977887,
+        1.026889,
+        0.988471,
+        1.002609,
+        1.0,
+        1.0
+      ],
+      "scaleY": [
+        1.0,
+        1.1,
+        1.035,
+        0.96,
+        1.018,
+        0.996,
+        1.0,
+        1.0
+      ],
+      "durationMs": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
+      ]
+    },
+    {
+      "state": "running-left",
+      "sources": [
+        "smile",
+        "smile",
+        "smile",
+        "smile",
+        "smile",
+        "smile",
+        "smile",
+        "smile"
+      ],
+      "scaleX": [
+        1.0,
+        0.939928,
+        0.977887,
+        1.026889,
+        0.988471,
+        1.002609,
+        1.0,
+        1.0
+      ],
+      "scaleY": [
+        1.0,
+        1.1,
+        1.035,
+        0.96,
+        1.018,
+        0.996,
+        1.0,
+        1.0
+      ],
+      "durationMs": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
+      ]
+    },
+    {
+      "state": "waving",
+      "sources": [
+        "knock",
+        "knock",
+        "knock",
+        "knock"
+      ],
+      "scaleX": [
+        0.939928,
+        1.023428,
+        0.990369,
+        1.0
+      ],
+      "scaleY": [
+        1.1,
+        0.965,
+        1.015,
+        1.0
+      ],
+      "durationMs": [
+        140,
+        140,
+        140,
+        280
+      ]
+    },
+    {
+      "state": "jumping",
+      "sources": [
+        "knock",
+        "knock",
+        "knock",
+        "knock",
+        "knock"
+      ],
+      "scaleX": [
+        0.9,
+        1.05,
+        0.985,
+        1.005,
+        1.0
+      ],
+      "scaleY": [
+        1.13,
+        0.96,
+        1.02,
+        0.995,
+        1.0
+      ],
+      "durationMs": [
+        140,
+        140,
+        140,
+        140,
+        280
+      ]
+    },
+    {
+      "state": "failed",
+      "sources": [
+        "crying",
+        "crying",
+        "crying",
+        "crying",
+        "crying",
+        "crying",
+        "crying",
+        "crying"
+      ],
+      "scaleX": [
+        0.937162,
+        1.023428,
+        0.984078,
+        1.006554,
+        0.990369,
+        1.003263,
+        0.994834,
+        1.0
+      ],
+      "scaleY": [
+        1.105,
+        0.965,
+        1.025,
+        0.99,
+        1.015,
+        0.995,
+        1.008,
+        1.0
+      ],
+      "durationMs": [
+        140,
+        140,
+        140,
+        140,
+        140,
+        140,
+        140,
+        240
+      ]
+    },
+    {
+      "state": "waiting",
+      "sources": [
+        "smile-closed",
+        "smile-closed",
+        "smile-closed",
+        "smile-closed",
+        "smile-closed",
+        "smile-closed"
+      ],
+      "scaleX": [
+        1.0,
+        0.99446,
+        0.991395,
+        0.995146,
+        1.001756,
+        1.0
+      ],
+      "scaleY": [
+        1.0,
+        1.016,
+        1.025,
+        1.014,
+        0.995,
+        1.0
+      ],
+      "durationMs": [
+        150,
+        150,
+        150,
+        150,
+        150,
+        260
+      ]
+    },
+    {
+      "state": "running",
+      "sources": [
+        "typing",
+        "typing",
+        "typing",
+        "typing",
+        "typing",
+        "typing"
+      ],
+      "scaleX": [
+        0.990369,
+        1.009872,
+        0.992276,
+        1.007878,
+        0.994834,
+        1.0
+      ],
+      "scaleY": [
+        1.015,
+        0.985,
+        1.012,
+        0.988,
+        1.008,
+        1.0
+      ],
+      "durationMs": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
+      ]
+    },
+    {
+      "state": "review",
+      "sources": [
+        "notes",
+        "notes",
+        "notes",
+        "notes",
+        "notes",
+        "notes"
+      ],
+      "scaleX": [
+        1.0,
+        0.995834,
+        0.992412,
+        0.995146,
+        0.998952,
+        1.0
+      ],
+      "scaleY": [
+        1.0,
+        1.012,
+        1.022,
+        1.014,
+        1.003,
+        1.0
+      ],
+      "durationMs": [
+        150,
+        150,
+        150,
+        150,
+        150,
+        280
+      ]
+    }
+  ]
+}

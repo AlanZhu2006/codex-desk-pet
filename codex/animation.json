@@ -19,6 +19,14 @@
         140,
         140,
         320
+      ],
+      "nativeDurationMs": [
+        1680,
+        660,
+        660,
+        840,
+        840,
+        1920
       ]
     },
     {
@@ -26,6 +34,16 @@
       "state": "running-right",
       "frames": 8,
       "durationMs": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
+      ],
+      "nativeDurationMs": [
         120,
         120,
         120,
@@ -49,6 +67,16 @@
         120,
         120,
         220
+      ],
+      "nativeDurationMs": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
       ]
     },
     {
@@ -56,6 +84,12 @@
       "state": "waving",
       "frames": 4,
       "durationMs": [
+        140,
+        140,
+        140,
+        280
+      ],
+      "nativeDurationMs": [
         140,
         140,
         140,
@@ -72,6 +106,13 @@
         140,
         140,
         280
+      ],
+      "nativeDurationMs": [
+        140,
+        140,
+        140,
+        140,
+        280
       ]
     },
     {
@@ -79,6 +120,16 @@
       "state": "failed",
       "frames": 8,
       "durationMs": [
+        140,
+        140,
+        140,
+        140,
+        140,
+        140,
+        140,
+        240
+      ],
+      "nativeDurationMs": [
         140,
         140,
         140,
@@ -100,6 +151,14 @@
         150,
         150,
         260
+      ],
+      "nativeDurationMs": [
+        150,
+        150,
+        150,
+        150,
+        150,
+        260
       ]
     },
     {
@@ -107,6 +166,14 @@
       "state": "running",
       "frames": 6,
       "durationMs": [
+        120,
+        120,
+        120,
+        120,
+        120,
+        220
+      ],
+      "nativeDurationMs": [
         120,
         120,
         120,
@@ -126,21 +193,17 @@
         150,
         150,
         280
+      ],
+      "nativeDurationMs": [
+        150,
+        150,
+        150,
+        150,
+        150,
+        280
       ]
     }
   ],
-  "motionStyle": "standing-slide",
-  "motionFrameSource": {
-    "state": "idle",
-    "indices": [
-      0,
-      0,
-      1,
-      2,
-      3,
-      4,
-      5,
-      5
-    ]
-  }
+  "motionStyle": "fixed-foot-breathing-and-spring",
+  "timingNote": "durationMs preserves the standalone app's existing tempo. nativeDurationMs records timing observed in the current Codex client and cannot override Codex timing."
 }
