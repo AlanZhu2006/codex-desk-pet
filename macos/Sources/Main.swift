@@ -46,7 +46,7 @@ private enum PetMain {
                 }
                 try PetController.selfTest(resources: resources)
                 try ActivityMonitor.selfTest()
-                print("PASS: app assets, animation geometry, alpha hit testing, and activity monitor fixtures")
+                print("PASS: app assets, animation geometry, alpha hit testing, idle behavior, and activity monitor fixtures")
             } catch {
                 fputs("Self-test failed: \(error)\n", stderr)
                 exit(1)

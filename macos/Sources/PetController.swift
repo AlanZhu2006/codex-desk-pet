@@ -121,6 +121,10 @@ final class PetController: NSObject, NSMenuDelegate {
     private var paused = false
     private var staysOnTop = true
     private var currentSize: CGFloat = 208
+    private var idleBehavior = IdleBehavior()
+    private var idleExpressionsEnabled = true
+    private var idleWanderingEnabled = true
+    private var menuOpen = false
 
     private let expressionOptions: [(String, String)] = [
         ("smile", "微笑"), ("smile-closed", "眯眼笑"), ("typing", "敲键盘"),
@@ -154,10 +158,13 @@ final class PetController: NSObject, NSMenuDelegate {
             currentSize = CGFloat(defaults.double(forKey: "petSize"))
         }
         paused = defaults.bool(forKey: "petPaused")
+        idleExpressionsEnabled = defaults.object(forKey: "idleExpressions") == nil ? true : defaults.bool(forKey: "idleExpressions")
+        idleWanderingEnabled = defaults.object(forKey: "idleWandering") == nil ? true : defaults.bool(forKey: "idleWandering")
         staysOnTop = defaults.object(forKey: "petOnTop") == nil ? true : defaults.bool(forKey: "petOnTop")
         resizePet(to: currentSize, persist: false)
         panel.level = staysOnTop ? .floating : .normal
         restorePosition()
+        resetIdleBehavior()
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = item.button {
             button.image = NSImage(systemSymbolName: "sun.max.fill", accessibilityDescription: "Claude 娘桌宠")
@@ -167,7 +174,7 @@ final class PetController: NSObject, NSMenuDelegate {
         item.menu = menu
         statusItem = item
         setAnimation("idle", force: true)
-        showBubble("右键切换表情", seconds: 5)
+        showBubble("待机时会自己玩一会儿", seconds: 5)
         panel.orderFrontRegardless()
         let newTimer = Timer(timeInterval: 1.0 / 24.0, target: self, selector: #selector(tick), userInfo: nil, repeats: true)
         timer = newTimer
@@ -230,6 +237,7 @@ final class PetController: NSObject, NSMenuDelegate {
             self.isDragging = false
             if self.manualExpression == nil { self.applyAutomaticState(self.lastActivityState) }
             self.savePosition()
+            self.resetIdleBehavior()
             self.updateClickThrough()
         }
         petView.onContextMenu = { [weak self] event in
@@ -253,10 +261,25 @@ final class PetController: NSObject, NSMenuDelegate {
         return atlas.cropping(to: rect)
     }
 
+    private static func framedPortrait(_ image: CGImage) -> CGImage? {
+        // Match the atlas's character height and foot baseline. Raw portraits
+        // are tightly cropped, so drawing them at cell height would make the
+        // character grow each time an idle expression changes.
+        guard let context = CGContext(data: nil, width: 192, height: 208, bitsPerComponent: 8,
+                                      bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        let scale = min(174 / CGFloat(image.height), 160 / CGFloat(image.width))
+        let size = CGSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: (192 - size.width) / 2, y: 6, width: size.width, height: size.height))
+        return context.makeImage()
+    }
+
     private func loadArtwork() {
         for (name, _) in expressionOptions {
-            if let image = Self.readImage(resources.appendingPathComponent("sprites/\(name).png")) {
-                expressions[name] = PetFrame(image)
+            if let image = Self.readImage(resources.appendingPathComponent("sprites/\(name).png")),
+               let framed = Self.framedPortrait(image) {
+                expressions[name] = PetFrame(framed)
             }
         }
         guard let atlas = Self.readImage(resources.appendingPathComponent("Atlas.png")),
@@ -361,6 +384,10 @@ final class PetController: NSObject, NSMenuDelegate {
                 throw NSError(domain: "ClaudeDeskPet.SelfTest", code: 1, userInfo: [NSLocalizedDescriptionKey: "无法加载原版表情：\(name)"])
             }
             try require(image.width > 0 && image.height > 0 && maximumAlpha(image) > 0.1, "原版表情为空：\(name)")
+            guard let framed = framedPortrait(image) else {
+                throw NSError(domain: "ClaudeDeskPet.SelfTest", code: 1, userInfo: [NSLocalizedDescriptionKey: "表情对齐失败：\(name)"])
+            }
+            try require(framed.width == 192 && framed.height == 208 && maximumAlpha(framed) > 0.1, "表情对齐尺寸或像素不符：\(name)")
         }
 
         // Exercise the real hit-testing transform at both a transparent corner
@@ -386,6 +413,7 @@ final class PetController: NSObject, NSMenuDelegate {
             }
         }
         try require(testedBody, "首帧没有不透明的人物像素")
+        try IdleBehavior.selfTest()
     }
 
     private func applyAutomaticState(_ state: String) {
@@ -437,13 +465,56 @@ final class PetController: NSObject, NSMenuDelegate {
 
     @objc private func tick() {
         let now = ProcessInfo.processInfo.systemUptime
-        if !paused && !isHidden, now >= nextFrameTime, let animation = animations[currentAnimation] {
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let idle = idleBehavior.update(now: now,
+                                       eligible: lastActivityState == "idle" && manualExpression == nil && !isDragging && !paused && !isHidden && !menuOpen,
+                                       posesEnabled: idleExpressionsEnabled,
+                                       wanderingEnabled: idleWanderingEnabled,
+                                       reduceMotion: reduceMotion,
+                                       pointerNear: pointerNearPet())
+        if let origin = idle.origin { panel.setFrameOrigin(origin) }
+        if let pose = idle.pose {
+            if pose.hasPrefix("static:") { showStatic(String(pose.dropFirst(7))) }
+            else { setAnimation(pose) }
+        }
+        if !paused && !isHidden && !reduceMotion, now >= nextFrameTime, let animation = animations[currentAnimation] {
             frameIndex = (frameIndex + 1) % animation.frames.count
             petView.sprite = animation.frames[frameIndex]
             nextFrameTime = now + animation.durations[frameIndex]
         }
         if petView.bubble != nil && now >= bubbleUntil { petView.bubble = nil }
         updateClickThrough()
+    }
+
+    private func pointerNearPet() -> Bool {
+        let windowPoint = panel.convertPoint(fromScreen: NSEvent.mouseLocation)
+        let point = petView.convert(windowPoint, from: nil)
+        return petView.spriteRect.insetBy(dx: -16, dy: -16).contains(point)
+    }
+
+    private func idleAllowedRect() -> CGRect {
+        let candidate = panel.frame
+        let screen = NSScreen.screens.max { a, b in
+            let left = a.visibleFrame.intersection(candidate)
+            let right = b.visibleFrame.intersection(candidate)
+            return max(0, left.width) * max(0, left.height) < max(0, right.width) * max(0, right.height)
+        }
+        let visible = (screen ?? NSScreen.main)?.visibleFrame ?? candidate
+        return CGRect(x: visible.minX, y: visible.minY,
+                      width: max(0, visible.width - candidate.width),
+                      height: max(0, visible.height - candidate.height))
+    }
+
+    private func resetIdleBehavior() {
+        idleBehavior.reset(now: ProcessInfo.processInfo.systemUptime, origin: panel.frame.origin, allowedRect: idleAllowedRect())
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        if menu === self.menu { menuOpen = true }
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        if menu === self.menu { menuOpen = false }
     }
 
     private func updateClickThrough() {
@@ -464,6 +535,10 @@ final class PetController: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         let follow = addItem("自动跟随 Codex", action: #selector(resumeFollowing))
         follow.state = manualExpression == nil ? .on : .off
+        let randomExpressions = addItem("待机随机表情", action: #selector(toggleIdleExpressions))
+        randomExpressions.state = idleExpressionsEnabled ? .on : .off
+        let wandering = addItem("待机小范围漫游", action: #selector(toggleIdleWandering))
+        wandering.state = idleWanderingEnabled ? .on : .off
 
         let expressionItem = NSMenuItem(title: "切换表情", action: nil, keyEquivalent: "")
         let expressionMenu = NSMenu()
@@ -529,6 +604,17 @@ final class PetController: NSObject, NSMenuDelegate {
         resizePet(to: CGFloat(height), persist: true)
     }
 
+    @objc private func toggleIdleExpressions() {
+        idleExpressionsEnabled.toggle()
+        defaults.set(idleExpressionsEnabled, forKey: "idleExpressions")
+        if !idleExpressionsEnabled && manualExpression == nil && lastActivityState == "idle" { setAnimation("idle") }
+    }
+
+    @objc private func toggleIdleWandering() {
+        idleWanderingEnabled.toggle()
+        defaults.set(idleWanderingEnabled, forKey: "idleWandering")
+    }
+
     private func resizePet(to height: CGFloat, persist: Bool) {
         let previous = panel.frame
         currentSize = height
@@ -539,7 +625,11 @@ final class PetController: NSObject, NSMenuDelegate {
         panel.setFrame(NSRect(origin: origin, size: size), display: true)
         petView.frame = NSRect(origin: .zero, size: size)
         petView.needsDisplay = true
-        if persist { defaults.set(Double(height), forKey: "petSize"); savePosition() }
+        if persist {
+            defaults.set(Double(height), forKey: "petSize")
+            savePosition()
+            resetIdleBehavior()
+        }
     }
 
     @objc private func togglePause() {
@@ -583,6 +673,7 @@ final class PetController: NSObject, NSMenuDelegate {
         let origin = NSPoint(x: visible.maxX - panel.frame.width - 38, y: visible.minY + 38)
         panel.setFrameOrigin(clampedOrigin(origin, size: panel.frame.size))
         savePosition()
+        resetIdleBehavior()
     }
 
     private func clampedOrigin(_ origin: NSPoint, size: NSSize, preferPointerScreen: Bool = false) -> NSPoint {
@@ -607,9 +698,11 @@ final class PetController: NSObject, NSMenuDelegate {
     @objc private func screensChanged() {
         panel.setFrameOrigin(clampedOrigin(panel.frame.origin, size: panel.frame.size))
         savePosition()
+        resetIdleBehavior()
     }
 
     private func savePosition() {
+        // Called only for deliberate placement changes; roaming never writes preferences.
         defaults.set(Double(panel.frame.origin.x), forKey: "petPositionX")
         defaults.set(Double(panel.frame.origin.y), forKey: "petPositionY")
     }

@@ -40,7 +40,8 @@ def main():
     except (OSError, ValueError, KeyError) as error:
         parser.exit(1, f'{error}\n')
     print(f'{action}: {target}')
-    print('In Codex, open Settings > Mini & Pets / Pets, refresh local pets, then select Claude 娘 · 向日葵.')
+    print('In Codex: Settings > Mini & Pets / Pets > Refresh > select Claude 娘 · 向日葵 > Show mini / Show pet.')
+    print('On macOS, Option+Space also opens the floating controls. Select Always visible to keep them on screen.')
 
 
 if __name__ == '__main__':
