@@ -46,7 +46,7 @@ private enum PetMain {
                 }
                 try PetController.selfTest(resources: resources)
                 try ActivityMonitor.selfTest()
-                print("PASS: assets, brightness and transparent redraw, Codex-sized geometry, airborne hit testing, per-expression loops, hover jumps and re-entry, click/drag gestures, idle behavior, and activity monitor fixtures")
+                print("PASS: classic Codex pixels and frame playback, vivid fallback palette, transparent redraw, cell geometry, airborne hit testing, portrait motion, hover re-entry, gestures, idle behavior, and activity monitor fixtures")
             } catch {
                 fputs("Self-test failed: \(error)\n", stderr)
                 exit(1)

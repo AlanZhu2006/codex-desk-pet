@@ -73,7 +73,8 @@ struct PortraitMotion {
         return elapsed >= 0 && elapsed < Self.transitionDuration
     }
 
-    func sample(at animationTime: TimeInterval, expression: String, reducedMotion: Bool) -> Shape {
+    func sample(at animationTime: TimeInterval, expression: String, reducedMotion: Bool,
+                loopIntensity: CGFloat = 1) -> Shape {
         guard !reducedMotion, animationTime.isFinite else { return .identity }
         let time = max(0, animationTime)
         let name = expression.hasPrefix("static:") ? String(expression.dropFirst(7)) : expression
@@ -95,7 +96,8 @@ struct PortraitMotion {
             }
         }
 
-        let weight = CGFloat(loopWeight)
+        let intensity = loopIntensity.isFinite ? min(1, max(0, loopIntensity)) : 1
+        let weight = CGFloat(loopWeight) * intensity
         return Shape(
             scaleX: min(1.06, max(0.89, transition.scaleX + (loop.scaleX - 1) * weight)),
             scaleY: min(1.13, max(0.95, transition.scaleY + (loop.scaleY - 1) * weight)),

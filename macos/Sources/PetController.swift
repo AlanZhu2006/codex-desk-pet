@@ -9,10 +9,14 @@ private final class PetPanel: NSPanel {
 private struct PetFrame {
     let image: NSImage
     let pixels: NSBitmapImageRep
+    let isAtlasCell: Bool
+    let interpolation: NSImageInterpolation
 
-    init(_ image: CGImage) {
+    init(_ image: CGImage, isAtlasCell: Bool = false) {
         self.image = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
         self.pixels = NSBitmapImageRep(cgImage: image)
+        self.isAtlasCell = isAtlasCell
+        self.interpolation = isAtlasCell ? .none : .high
     }
 }
 
@@ -41,7 +45,8 @@ private final class PetView: NSView {
     var offsetX: CGFloat = 0 { didSet { if oldValue != offsetX { needsDisplay = true } } }
     var offsetY: CGFloat = 0 { didSet { if oldValue != offsetY { needsDisplay = true } } }
     var spriteHeight: CGFloat { cellWidth * 208 / 192 }
-    var jumpHeadroom: CGFloat { cellWidth * 24 / 192 }
+    var headroomSource: CGFloat = 24
+    var jumpHeadroom: CGFloat { cellWidth * headroomSource / 192 }
     var cellRect: NSRect { NSRect(x: (bounds.width - cellWidth) / 2, y: 0, width: cellWidth, height: spriteHeight) }
     var bubble: String? { didSet { needsDisplay = true } }
     var onMouseDown: ((NSEvent) -> Void)?
@@ -55,6 +60,7 @@ private final class PetView: NSView {
 
     var restingSpriteRect: NSRect {
         guard let sprite else { return .zero }
+        if sprite.isAtlasCell { return cellRect }
         let size = sprite.image.size
         // The same composition as the Codex atlas: 170px portrait height,
         // foot at y=202 in a 192x208 cell. Draw the original 400px artwork
@@ -70,8 +76,9 @@ private final class PetView: NSView {
         let resting = restingSpriteRect
         let unit = cellWidth / 192
         let width = resting.width * scaleX
+        let foot = 6 * unit
         return NSRect(x: resting.midX - width / 2 + offsetX * unit,
-                      y: resting.minY + offsetY * unit,
+                      y: foot + (resting.minY - foot) * scaleY + offsetY * unit,
                       width: width, height: resting.height * scaleY)
     }
 
@@ -96,7 +103,10 @@ private final class PetView: NSView {
         // This transparent view repaints continuously. Clear the previous
         // frame before source-over drawing, including translucent edge pixels.
         NSGraphicsContext.current?.cgContext.clear(dirtyRect)
-        sprite?.image.draw(in: spriteRect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high])
+        if let sprite {
+            sprite.image.draw(in: spriteRect, from: .zero, operation: .sourceOver, fraction: 1,
+                              respectFlipped: true, hints: [.interpolation: sprite.interpolation])
+        }
         guard let bubble, !bubble.isEmpty else { return }
         let rect = NSRect(x: 8, y: spriteHeight + jumpHeadroom + 7, width: bounds.width - 16, height: 29)
         NSColor(calibratedWhite: 0.99, alpha: 0.95).setFill()
@@ -139,7 +149,12 @@ final class PetController: NSObject, NSMenuDelegate {
     private var timer: Timer?
     private var expressions: [String: PetFrame] = [:]
     private var originalArtwork: [String: CGImage] = [:]
-    private var brightness = PortraitBrightness.bright
+    private var brightness = PortraitBrightness.codex
+    private var codexClips: [String: CodexArtwork.Clip] = [:]
+    private var displayFrames: [String: [PetFrame]] = [:]
+    private var displayDurations: [String: [TimeInterval]] = [:]
+    private var portraitStartedAt: TimeInterval = 0
+    private var displayedFrameIndex = 0
     private var currentAnimation = "idle"
     private var currentPortrait = "smile"
     private var motion = PortraitMotion()
@@ -176,7 +191,7 @@ final class PetController: NSObject, NSMenuDelegate {
         panel = PetPanel(contentRect: petView.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         super.init()
         precondition(Thread.isMainThread)
-        brightness = PortraitBrightness(rawValue: defaults.string(forKey: "portraitBrightness") ?? "") ?? .bright
+        brightness = PortraitBrightness(rawValue: defaults.string(forKey: "portraitBrightness") ?? "") ?? .codex
         loadArtwork()
         configurePanel()
         configureInteraction()
@@ -324,14 +339,40 @@ final class PetController: NSObject, NSMenuDelegate {
     }
 
     private func loadArtwork() {
+        if codexClips.isEmpty, let atlas = Self.readImage(resources.appendingPathComponent("Atlas.png")) {
+            codexClips = CodexArtwork.clips(atlas: atlas)
+        }
         for (name, _) in expressionOptions {
             if originalArtwork[name] == nil {
                 originalArtwork[name] = Self.readImage(resources.appendingPathComponent("sprites/\(name).png"))
             }
-            if let image = originalArtwork[name] {
-                expressions[name] = PetFrame(PortraitColor.adjusted(image, brightness: brightness))
+            if brightness == .codex, let clip = codexClips[name] {
+                // These are the exact vivid Codex pixels, not a gamma-adjusted
+                // rendition of the separate original portrait artwork.
+                displayFrames[name] = clip.frames.map { PetFrame($0, isAtlasCell: true) }
+                displayDurations[name] = clip.durations
+            } else if let image = originalArtwork[name] {
+                let adjusted = PortraitColor.adjusted(image, brightness: brightness)
+                if brightness == .codex, let cell = Self.framedPortrait(adjusted) {
+                    displayFrames[name] = [PetFrame(cell, isAtlasCell: true)]
+                } else {
+                    displayFrames[name] = [PetFrame(adjusted)]
+                }
+                displayDurations[name] = []
             }
+            expressions[name] = displayFrames[name]?.first
         }
+    }
+
+    private static func framedPortrait(_ image: CGImage) -> CGImage? {
+        guard let context = CGContext(data: nil, width: 192, height: 208, bitsPerComponent: 8,
+                                      bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        let height: CGFloat = 170
+        let width = CGFloat(image.width) / CGFloat(image.height) * height
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: (192 - width) / 2, y: 6, width: width, height: height))
+        return context.makeImage()
     }
 
     /// Validate the exact bundled resources and the same top-origin crops used
@@ -472,6 +513,23 @@ final class PetController: NSObject, NSMenuDelegate {
             if checkedAirborneHead { break }
         }
         try require(checkedAirborneHead, "未检查跳起位置的实际命中")
+        let classic = CodexArtwork.clips(atlas: atlas)
+        guard let referenceFrame = classic["notes"]?.frames.last else {
+            throw NSError(domain: "ClaudeDeskPet.SelfTest", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "缺少Codex同款看书帧"])
+        }
+        let classicView = PetView(frame: NSRect(x: 0, y: 0, width: 124, height: 160))
+        classicView.cellWidth = 112
+        classicView.headroomSource = 56
+        classicView.sprite = PetFrame(referenceFrame, isAtlasCell: true)
+        try require(abs(classicView.spriteRect.width - 112) < 0.001 && abs(classicView.spriteRect.height - 121.3333333) < 0.001,
+                    "Codex整格必须直接按112pt绘制，不得再次缩小人物")
+        try require(classicView.sprite?.interpolation == NSImageInterpolation.none, "Codex同款图帧应使用清晰像素采样")
+        classicView.scaleY = 1.13
+        classicView.offsetY = 24
+        try require(classicView.spriteRect.maxY < classicView.bounds.maxY, "完整Codex帧的跳跃不应裁切")
+        let cellFoot = classicView.spriteRect.minY + 6 * 112 / 192 * classicView.scaleY
+        try require(abs(cellFoot - (6 + 24) * 112 / 192) < 0.001, "Codex整格变形必须保留正确脚底锚点")
         // Repainting a transparent portrait must not accumulate old alpha or
         // leave a previous expression underneath it.
         guard let paint = CGContext(data: nil, width: 248, height: 280, bitsPerComponent: 8,
@@ -500,6 +558,7 @@ final class PetController: NSObject, NSMenuDelegate {
         try PetPressTracker.selfTest()
         try PetHoverTracker.selfTest()
         try PortraitColor.selfTest()
+        try CodexArtwork.selfTest(atlas: atlas)
     }
 
     private func applyAutomaticState(_ state: String) {
@@ -553,6 +612,8 @@ final class PetController: NSObject, NSMenuDelegate {
             else { motion.expressionChanged(at: animationTime) }
         }
         currentPortrait = name
+        portraitStartedAt = animationTime
+        displayedFrameIndex = 0
         petView.sprite = frame
         let label = expressionOptions.first { $0.0 == name }?.1 ?? name
         petView.setAccessibilityValue(label)
@@ -561,11 +622,29 @@ final class PetController: NSObject, NSMenuDelegate {
 
     private func updatePortraitMotion() {
         let shape = motion.sample(at: animationTime, expression: currentPortrait,
-                                  reducedMotion: paused || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+                                  reducedMotion: paused || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+                                  loopIntensity: (displayFrames[currentPortrait]?.count ?? 0) > 1 ? 0.2 : 1)
         petView.scaleX = shape.scaleX
         petView.scaleY = shape.scaleY
         petView.offsetX = shape.offsetX
         petView.offsetY = shape.offsetY
+    }
+
+    private func updateArtworkFrame() {
+        guard let frames = displayFrames[currentPortrait], frames.count > 1,
+              let durations = displayDurations[currentPortrait], durations.count == frames.count else { return }
+        let total = durations.reduce(0, +)
+        guard total > 0 else { return }
+        var phase = max(0, animationTime - portraitStartedAt).truncatingRemainder(dividingBy: total)
+        var index = frames.count - 1
+        for candidate in durations.indices {
+            if phase < durations[candidate] { index = candidate; break }
+            phase -= durations[candidate]
+        }
+        if index != displayedFrameIndex {
+            displayedFrameIndex = index
+            petView.sprite = frames[index]
+        }
     }
 
     private func showBubble(_ message: String, seconds: TimeInterval) {
@@ -602,6 +681,7 @@ final class PetController: NSObject, NSMenuDelegate {
             if pose.hasPrefix("static:") { showPortrait(String(pose.dropFirst(7))) }
             else { setAnimation(pose) }
         }
+        if !paused && !isHidden && !reduceMotion && mayAnimate && !menuOpen { updateArtworkFrame() }
         if !paused && !isHidden && mayAnimate && !menuOpen { updatePortraitMotion() }
         if petView.bubble != nil && now >= bubbleUntil { petView.bubble = nil }
         updateClickThrough()
@@ -702,7 +782,7 @@ final class PetController: NSObject, NSMenuDelegate {
         expressionItem.submenu = expressionMenu
         menu.addItem(expressionItem)
 
-        let brightnessItem = NSMenuItem(title: "亮度", action: nil, keyEquivalent: "")
+        let brightnessItem = NSMenuItem(title: "显示风格", action: nil, keyEquivalent: "")
         let brightnessMenu = NSMenu()
         for value in PortraitBrightness.allCases {
             let item = NSMenuItem(title: value.title, action: #selector(selectBrightness(_:)), keyEquivalent: "")
@@ -791,8 +871,13 @@ final class PetController: NSObject, NSMenuDelegate {
         brightness = value
         defaults.set(value.rawValue, forKey: "portraitBrightness")
         loadArtwork()
-        // Brightness changes do not reset the chosen expression or its motion.
+        // Appearance changes preserve the expression and its motion; only
+        // the matching texture sequence restarts on the new material.
         petView.sprite = expressions[currentPortrait]
+        displayedFrameIndex = 0
+        portraitStartedAt = animationTime
+        resizePet(to: currentSize, persist: false)
+        resetIdleBehavior()
     }
 
     @objc private func toggleIdleExpressions() {
@@ -818,9 +903,11 @@ final class PetController: NSObject, NSMenuDelegate {
     private func resizePet(to width: CGFloat, persist: Bool) {
         let previous = panel.frame
         currentSize = width
+        let headroom: CGFloat = brightness == .codex ? 56 : 24
         let size = NSSize(width: statusBubblesEnabled ? max(188, width + 12) : width + 12,
-                          height: width * (208 + 24) / 192 + (statusBubblesEnabled ? 44 : 4))
+                          height: width * (208 + headroom) / 192 + (statusBubblesEnabled ? 44 : 4))
         petView.cellWidth = width
+        petView.headroomSource = headroom
         var origin = NSPoint(x: previous.midX - size.width / 2, y: previous.minY)
         origin = clampedOrigin(origin, size: size)
         panel.setFrame(NSRect(origin: origin, size: size), display: true)

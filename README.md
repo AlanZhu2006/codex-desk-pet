@@ -2,7 +2,7 @@
 
 一个给 [Claude Code](https://claude.com/claude-code) 用的小插件：Claude 干活的时候，桌面上会有一个 Q 版 Claude 娘陪着你，实时显示它在做什么。
 
-本 fork 新增 **macOS 独立桌宠应用**、**Codex 原生桌宠素材包**和**大哭表情**。Mac 用户可运行透明悬浮的 [Claude Desktop Pet.app](macos/README.md)：外观与尺寸参考 Codex，支持鼠标移入跳跃、单击切换11种动态立绘、亮度调节、待机漫游及跟随 Codex 任务。也可使用 [Codex 内置桌宠素材包](codex/README.md)。
+本 fork 新增 **macOS 独立桌宠应用**、**Codex 原生桌宠素材包**和**大哭表情**。Mac 用户可运行透明悬浮的 [Claude Desktop Pet.app](macos/README.md)：默认使用「Codex 鲜亮」图帧风格，支持鼠标移入跳跃、单击切换11种动态立绘、外观调节、待机漫游及跟随 Codex 任务。也可使用 [Codex 内置桌宠素材包](codex/README.md)。
 
 ![六种状态预览](docs/preview.png)
 

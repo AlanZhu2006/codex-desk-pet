@@ -3,18 +3,20 @@ import CoreGraphics
 import Foundation
 
 enum PortraitBrightness: String, CaseIterable {
-    case original, bright, brighter
+    case codex, original, bright, brighter
 
     var title: String {
         switch self {
-        case .original: return "原色"
-        case .bright: return "明亮"
-        case .brighter: return "更明亮"
+        case .codex: return "Codex 鲜亮"
+        case .original: return "原立绘 · 原色"
+        case .bright: return "原立绘 · 明亮"
+        case .brighter: return "原立绘 · 更明亮"
         }
     }
 
     var gamma: Double {
         switch self {
+        case .codex: return 0.96
         case .original: return 1
         case .bright: return 0.90
         case .brighter: return 0.80
@@ -61,9 +63,22 @@ enum PortraitColor {
                 // Fully transparent RGB is intentionally zero. It cannot affect
                 // visible color and stays safe for interpolation at the edge.
                 guard alpha != 0 else { continue }
-                output[target] = lookup[Int(pixels[input + redOffset])]
-                output[target + 1] = lookup[Int(pixels[input + redOffset + 1])]
-                output[target + 2] = lookup[Int(pixels[input + redOffset + 2])]
+                if brightness == .codex {
+                    // Original-only expressions have no classic Codex frame.
+                    // Match the vivid palette with chroma/contrast, rather than
+                    // washing them out by raising every RGB channel equally.
+                    let rgb = (0..<3).map { Double(pixels[input + redOffset + $0]) / 255 }
+                    let luma = rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722
+                    for channel in 0..<3 {
+                        let saturated = luma + (rgb[channel] - luma) * 1.18
+                        let contrasted = min(1, max(0, (saturated - 0.5) * 1.06 + 0.5))
+                        output[target + channel] = UInt8((255 * pow(contrasted, brightness.gamma)).rounded())
+                    }
+                } else {
+                    output[target] = lookup[Int(pixels[input + redOffset])]
+                    output[target + 1] = lookup[Int(pixels[input + redOffset + 1])]
+                    output[target + 2] = lookup[Int(pixels[input + redOffset + 2])]
+                }
             }
         }
 
@@ -120,19 +135,26 @@ enum PortraitColor {
         let brightImage = adjusted(source, brightness: .bright)
         let bright = rgba(brightImage)
         let brighter = rgba(adjusted(source, brightness: .brighter))
+        let codex = rgba(adjusted(source, brightness: .codex))
         try require(Array(bright[0..<4]) == [0, 0, 0, 255], "Brightness must retain black")
         try require(Array(bright[4..<8]) == [255, 255, 255, 255], "Brightness must retain white")
         try require(Array(bright[8..<12]) == [137, 137, 137, 255], "Bright midtone fixture should map 128 to 137")
         try require(brighter[8] == 147 && brighter[8] > bright[8], "Brighter must lift midtones further")
         try require(Array(bright[12..<16]) == [73, 137, 198, 127], "Translucent pixels need straight RGB adjustment, not a premultiplied lift")
         for index in stride(from: 3, to: input.count, by: 4) {
-            try require(natural[index] == input[index] && bright[index] == input[index] && brighter[index] == input[index],
+            try require(natural[index] == input[index] && bright[index] == input[index] && brighter[index] == input[index] && codex[index] == input[index],
                         "Brightness changed alpha or the opaque shape")
         }
         try require(Array(natural[0..<20]) == Array(input[0..<20]), "Original mode should retain all visible source colors")
-        for output in [natural, bright, brighter] {
+        for output in [natural, bright, brighter, codex] {
             try require(Array(output[20..<24]) == [0, 0, 0, 0], "Hidden transparent RGB should be zero")
         }
+        try require(Array(codex[0..<4]) == [0, 0, 0, 255] && Array(codex[4..<8]) == [255, 255, 255, 255],
+                    "Vivid fallback must retain black and white")
+        let orange = image([230, 130, 60, 255], width: 1, height: 1)
+        let vividOrange = rgba(adjusted(orange, brightness: .codex))
+        try require(vividOrange[0] > 230 && vividOrange[2] < 60,
+                    "Vivid fallback must strengthen orange chroma rather than merely fade it")
         try require(brightImage.width == 3 && brightImage.height == 2 && brightImage.colorSpace?.name == CGColorSpace.sRGB,
                     "Brightness must preserve geometry and output sRGB")
         try require(brightImage.alphaInfo == .last, "Straight RGB data must be declared as straight alpha")
