@@ -141,7 +141,7 @@ private final class PetView: NSView {
 /// A local, non-activating companion. Construct and call it from the main thread.
 final class PetController: NSObject, NSMenuDelegate {
     private let resources: URL
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
     private let panel: PetPanel
     private let petView: PetView
     private let menu = NSMenu()
@@ -164,7 +164,10 @@ final class PetController: NSObject, NSMenuDelegate {
     private var bubbleUntil: TimeInterval = 0
     private var manualExpression: String?
     private var manualUntil: TimeInterval?
+    private var expressionPinned = false
     private var lastActivityState = "idle"
+    private var followsActivity = true
+    private var automaticActivityState: String { followsActivity ? lastActivityState : "idle" }
     private var pressTracker = PetPressTracker()
     private var dragMouseOrigin = NSPoint.zero
     private var dragWindowOrigin = NSPoint.zero
@@ -185,8 +188,9 @@ final class PetController: NSObject, NSMenuDelegate {
         ("confident", "自信"), ("crying", "大哭")
     ]
 
-    init(resources: URL) {
+    init(resources: URL, defaults: UserDefaults = .standard) {
         self.resources = resources
+        self.defaults = defaults
         petView = PetView(frame: NSRect(x: 0, y: 0, width: 124, height: 140))
         panel = PetPanel(contentRect: petView.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         super.init()
@@ -211,6 +215,7 @@ final class PetController: NSObject, NSMenuDelegate {
             currentSize = CGFloat(defaults.double(forKey: "petCellWidth"))
         }
         paused = defaults.bool(forKey: "petPaused")
+        followsActivity = defaults.object(forKey: "followCodexActivity") == nil ? true : defaults.bool(forKey: "followCodexActivity")
         idleExpressionsEnabled = defaults.object(forKey: "idleExpressions") == nil ? true : defaults.bool(forKey: "idleExpressions")
         if defaults.object(forKey: "videoStyleWandering") != nil {
             idleWanderingEnabled = defaults.bool(forKey: "videoStyleWandering")
@@ -248,7 +253,7 @@ final class PetController: NSObject, NSMenuDelegate {
         // tool arguments, and other user content never appear on the desktop.
         _ = text
         lastActivityState = state
-        guard manualExpression == nil && !pressTracker.isPressed else { return }
+        guard followsActivity && manualExpression == nil && !pressTracker.isPressed else { return }
         applyAutomaticState(state)
     }
 
@@ -302,7 +307,7 @@ final class PetController: NSObject, NSMenuDelegate {
             let isClick = self.pressTracker.end(at: NSEvent.mouseLocation)
             if isClick { self.cycleExpression() }
             else {
-                if self.manualExpression == nil { self.applyAutomaticState(self.lastActivityState) }
+                if self.manualExpression == nil { self.applyAutomaticState(self.automaticActivityState) }
                 self.savePosition()
                 self.resetIdleBehavior()
             }
@@ -566,6 +571,70 @@ final class PetController: NSObject, NSMenuDelegate {
                           userInfo: [NSLocalizedDescriptionKey: "缺少或无法读取CodexExtraExpressions.png补充动画图集"])
         }
         try CodexArtwork.selfTest(atlas: atlas, extraAtlas: extraAtlas)
+        try selectionSelfTest(resources: resources)
+    }
+
+    /// Exercise the real selection/timeout handlers with isolated preferences.
+    /// The panel stays hidden and no activity monitor or timer is started.
+    private static func selectionSelfTest(resources: URL) throws {
+        func require(_ condition: @autoclosure () -> Bool, _ message: String) throws {
+            guard condition() else {
+                throw NSError(domain: "ClaudeDeskPet.Selection", code: 1,
+                              userInfo: [NSLocalizedDescriptionKey: message])
+            }
+        }
+        NSApplication.shared.setActivationPolicy(.prohibited)
+        let domain = "ClaudeDeskPet.SelectionTest." + UUID().uuidString
+        guard let preferences = UserDefaults(suiteName: domain) else { return }
+        defer { preferences.removePersistentDomain(forName: domain) }
+        let controller = PetController(resources: resources, defaults: preferences)
+        controller.applyActivity(state: "idle", text: "")
+        let item = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        item.representedObject = "panic"
+        let before = ProcessInfo.processInfo.systemUptime
+        controller.selectExpression(item)
+        try require(controller.manualExpression == "panic" && controller.manualUntil != nil,
+                    "普通菜单选表情不得永久阻止待机")
+        controller.releaseExpiredSelection(at: before + 7)
+        try require(controller.manualExpression == "panic", "临时表情提前结束")
+        controller.releaseExpiredSelection(at: ProcessInfo.processInfo.systemUptime + 9)
+        try require(controller.manualExpression == nil && controller.currentPortrait == "smile",
+                    "临时表情结束后必须恢复自动待机")
+
+        controller.selectExpression(item)
+        controller.toggleExpressionPin()
+        controller.releaseExpiredSelection(at: ProcessInfo.processInfo.systemUptime + 600)
+        try require(controller.expressionPinned && controller.manualExpression == "panic"
+                    && controller.manualUntil == nil, "显式固定表情必须保持到用户解除")
+        controller.toggleIdleExpressions() // disable
+        controller.toggleIdleExpressions() // enabling random expressions releases the pin
+        try require(controller.idleExpressionsEnabled && !controller.expressionPinned
+                    && controller.manualExpression == nil, "开启待机随机必须解除旧手选锁")
+
+        for _ in 0..<64 {
+            let previous = controller.currentPortrait
+            controller.cycleExpression()
+            try require(controller.currentPortrait != previous && controller.manualUntil != nil,
+                        "随机点击不得连续重复或意外固定")
+        }
+        controller.resumeFollowing()
+        controller.applyActivity(state: "tool", text: "")
+        controller.selectExpression(item)
+        controller.releaseExpiredSelection(at: ProcessInfo.processInfo.systemUptime + 9)
+        try require(controller.currentPortrait == "typing" && controller.manualExpression == nil,
+                    "临时表情结束后必须恢复最新工作状态")
+        controller.enterFreeIdle()
+        controller.applyActivity(state: "tool", text: "")
+        try require(controller.currentPortrait == "smile" && controller.automaticActivityState == "idle",
+                    "自由待机不得被仍在运行的任务打断")
+        controller.selectExpression(item)
+        controller.releaseExpiredSelection(at: ProcessInfo.processInfo.systemUptime + 9)
+        try require(controller.currentPortrait == "smile" && !controller.followsActivity,
+                    "临时表情结束后应保留自由待机模式")
+        controller.resumeFollowing()
+        try require(controller.currentPortrait == "typing" && controller.followsActivity,
+                    "切回跟随模式必须恢复最新任务状态")
+        try require(!controller.panel.isVisible, "自测不应显示额外桌宠窗口")
     }
 
     private func applyAutomaticState(_ state: String) {
@@ -668,14 +737,10 @@ final class PetController: NSObject, NSMenuDelegate {
         let mayAnimate = !pressTracker.isPressed || pressTracker.isDragging
         if !paused && !isHidden && !reduceMotion && mayAnimate && !menuOpen { animationTime += delta }
         updateHover(reducedMotion: reduceMotion)
-        if let deadline = manualUntil, now >= deadline && !pressTracker.isPressed && !menuOpen {
-            manualUntil = nil
-            manualExpression = nil
-            applyAutomaticState(lastActivityState)
-        }
+        releaseExpiredSelection(at: now)
         let wasWandering = idleBehavior.isWandering
         let idle = idleBehavior.update(now: now,
-                                       eligible: lastActivityState == "idle" && manualExpression == nil && !pressTracker.isPressed && !paused && !isHidden && !menuOpen,
+                                       eligible: automaticActivityState == "idle" && manualExpression == nil && !pressTracker.isPressed && !paused && !isHidden && !menuOpen,
                                        posesEnabled: idleExpressionsEnabled,
                                        wanderingEnabled: idleWanderingEnabled,
                                        reduceMotion: reduceMotion,
@@ -698,6 +763,14 @@ final class PetController: NSObject, NSMenuDelegate {
         let windowPoint = panel.convertPoint(fromScreen: NSEvent.mouseLocation)
         let point = petView.convert(windowPoint, from: nil)
         return petView.cellRect.insetBy(dx: -16, dy: -16).contains(point)
+    }
+
+    private func releaseExpiredSelection(at now: TimeInterval) {
+        guard let deadline = manualUntil, now >= deadline,
+              !pressTracker.isPressed, !menuOpen else { return }
+        manualUntil = nil
+        manualExpression = nil
+        applyAutomaticState(automaticActivityState)
     }
 
     private func updateHover(reducedMotion: Bool) {
@@ -769,14 +842,18 @@ final class PetController: NSObject, NSMenuDelegate {
         menu.addItem(title)
         menu.addItem(.separator())
         let follow = addItem("自动跟随 Codex", action: #selector(resumeFollowing))
-        follow.state = manualExpression == nil ? .on : .off
-        addItem("下一种表情", action: #selector(nextExpression))
+        follow.state = followsActivity && manualExpression == nil ? .on : .off
+        let freeIdle = addItem("自由待机（随机表情）", action: #selector(enterFreeIdle))
+        freeIdle.state = !followsActivity && manualExpression == nil ? .on : .off
+        addItem("随机换一个表情", action: #selector(nextExpression))
         let randomExpressions = addItem("待机随机表情", action: #selector(toggleIdleExpressions))
         randomExpressions.state = idleExpressionsEnabled ? .on : .off
         let wandering = addItem("自动漫游（可选）", action: #selector(toggleIdleWandering))
         wandering.state = idleWanderingEnabled ? .on : .off
 
-        let expressionItem = NSMenuItem(title: "切换表情", action: nil, keyEquivalent: "")
+        let pin = addItem("固定当前表情", action: #selector(toggleExpressionPin))
+        pin.state = expressionPinned ? .on : .off
+        let expressionItem = NSMenuItem(title: expressionPinned ? "切换固定表情" : "切换表情（展示8秒）", action: nil, keyEquivalent: "")
         let expressionMenu = NSMenu()
         for (name, label) in expressionOptions {
             let item = NSMenuItem(title: label, action: #selector(selectExpression(_:)), keyEquivalent: "")
@@ -835,18 +912,34 @@ final class PetController: NSObject, NSMenuDelegate {
     }
 
     @objc private func resumeFollowing() {
+        followsActivity = true
+        defaults.set(true, forKey: "followCodexActivity")
+        resumeAutomaticExpressions()
+        showBubble("跟着 Codex 工作", seconds: 4)
+    }
+
+    @objc private func enterFreeIdle() {
+        followsActivity = false
+        defaults.set(false, forKey: "followCodexActivity")
+        idleExpressionsEnabled = true
+        defaults.set(true, forKey: "idleExpressions")
+        resumeAutomaticExpressions()
+        showBubble("自由待机", seconds: 4)
+    }
+
+    private func resumeAutomaticExpressions() {
+        expressionPinned = false
         manualExpression = nil
         manualUntil = nil
         // Force a fresh first frame even when the selected expression used the same state.
         currentAnimation = ""
-        applyAutomaticState(lastActivityState)
-        showBubble("跟着 Codex 工作", seconds: 4)
+        applyAutomaticState(automaticActivityState)
     }
 
     @objc private func selectExpression(_ sender: NSMenuItem) {
         guard let name = sender.representedObject as? String, expressions[name] != nil else { return }
         manualExpression = name
-        manualUntil = nil
+        manualUntil = expressionPinned ? nil : ProcessInfo.processInfo.systemUptime + 8
         showPortrait(name)
         let label = expressionOptions.first { $0.0 == name }?.1 ?? "切换表情"
         showBubble(label, seconds: 4)
@@ -854,14 +947,23 @@ final class PetController: NSObject, NSMenuDelegate {
 
     @objc private func nextExpression() { cycleExpression() }
 
+    @objc private func toggleExpressionPin() {
+        expressionPinned.toggle()
+        if expressionPinned {
+            manualExpression = currentPortrait
+            manualUntil = nil
+        } else {
+            resumeAutomaticExpressions()
+        }
+    }
+
     private func cycleExpression() {
-        let order = ["smile", "smile-closed", "confident", "knock", "confetti", "notes", "typing", "guilty", "panic", "crying", "stone"]
-        let index = order.firstIndex(of: currentPortrait) ?? -1
-        let name = order[(index + 1) % order.count]
+        let candidates = expressionOptions.map { $0.0 }.filter { $0 != currentPortrait }
+        guard let name = candidates.randomElement() else { return }
         manualExpression = name
-        // A quick interaction must not permanently hide future task status.
-        // The explicit expression menu remains available for a lasting choice.
-        manualUntil = ProcessInfo.processInfo.systemUptime + 8
+        // Ordinary expression selections are temporary. Only the explicit pin
+        // action may suspend automatic expressions indefinitely.
+        manualUntil = expressionPinned ? nil : ProcessInfo.processInfo.systemUptime + 8
         showPortrait(name)
         let label = expressionOptions.first { $0.0 == name }?.1 ?? name
         showBubble(label, seconds: 3)
@@ -890,7 +992,8 @@ final class PetController: NSObject, NSMenuDelegate {
     @objc private func toggleIdleExpressions() {
         idleExpressionsEnabled.toggle()
         defaults.set(idleExpressionsEnabled, forKey: "idleExpressions")
-        if !idleExpressionsEnabled && manualExpression == nil && lastActivityState == "idle" { setAnimation("idle") }
+        if idleExpressionsEnabled { resumeAutomaticExpressions() }
+        if !idleExpressionsEnabled && manualExpression == nil && automaticActivityState == "idle" { setAnimation("idle") }
     }
 
     @objc private func toggleIdleWandering() {

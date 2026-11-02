@@ -457,6 +457,12 @@ final class ActivityMonitor {
         switch kind {
         case "task_started":
             guard let task = task else { return }
+            // A main chat owns one current turn. If an earlier completion was
+            // missed, a new start supersedes only that chat's orphaned turn;
+            // work in other chats remains active. Do not publish an idle gap.
+            for previous in active.keys.filter({ $0.thread == task.thread && $0 != task }) {
+                active.removeValue(forKey: previous)
+            }
             active[task] = now
             transientUntil = nil
             publish("tool", "Codex 正在工作…")
@@ -478,8 +484,11 @@ final class ActivityMonitor {
         default:
             // Keep a known task alive on protocol progress, without interpreting its contents.
             if let task = task, active[task] != nil { active[task] = now }
-            else if kind == "token_count" {
-                for key in Array(active.keys) where key.thread == cursor.threadID { active[key] = now }
+            else if task == nil && kind == "token_count" {
+                // Anonymous usage progress belongs only to the chat's current
+                // turn. A late event tagged with an old turn cannot renew it.
+                let current = active.keys.filter { $0.thread == cursor.threadID }
+                if current.count == 1, let task = current.first { active[task] = now }
             }
         }
     }
@@ -666,5 +675,41 @@ final class ActivityMonitor {
         try append(event("task_started", "after-rotation", time: 24), to: b)
         monitor.tick(now: epoch.addingTimeInterval(24))
         try check(monitor.active.count == 1, "Monitoring did not recover after rotation")
+
+        // A dropped completion must not let an obsolete turn survive every
+        // later turn in that chat. Its late progress and termination events
+        // must also leave the replacement and other chats untouched.
+        let superseding = ActivityMonitor(codexHome: root) { _, _ in }
+        superseding.watchStartedAt = epoch
+        let sameCursor = Cursor(url: a, threadID: "same-chat", identity: Identity(device: 0, inode: 0), offset: 0)
+        let otherCursor = Cursor(url: b, threadID: "other-chat", identity: Identity(device: 0, inode: 0), offset: 0)
+        superseding.processLine(try event("task_started", "old-turn", time: 1), cursor: sameCursor, now: epoch.addingTimeInterval(1))
+        superseding.processLine(try event("task_started", "other-turn", time: 1), cursor: otherCursor, now: epoch.addingTimeInterval(1))
+        superseding.processLine(try event("task_started", "new-turn", time: 2), cursor: sameCursor, now: epoch.addingTimeInterval(2))
+        let oldTask = Task(thread: "same-chat", turn: "old-turn")
+        let newTask = Task(thread: "same-chat", turn: "new-turn")
+        let otherTask = Task(thread: "other-chat", turn: "other-turn")
+        try check(superseding.active.count == 2 && superseding.active[oldTask] == nil
+                  && superseding.active[newTask] != nil && superseding.active[otherTask] != nil
+                  && superseding.output.state == "tool", "New turn failed to supersede only its own chat's obsolete turn")
+        for kind in ["task_complete", "task_aborted", "turn_aborted"] {
+            superseding.processLine(try event(kind, "old-turn", time: 3), cursor: sameCursor, now: epoch.addingTimeInterval(3))
+        }
+        superseding.processLine(try line("event_msg", ["type": "error", "turn_id": "old-turn", "terminal": true], time: 4),
+                                cursor: sameCursor, now: epoch.addingTimeInterval(4))
+        try check(superseding.active.count == 2 && superseding.active[newTask] != nil && superseding.output.state == "tool",
+                  "A late old-turn termination removed the replacement turn")
+        superseding.processLine(try event("token_count", "old-turn", time: 5), cursor: sameCursor, now: epoch.addingTimeInterval(5))
+        try check(superseding.active[newTask] == epoch.addingTimeInterval(2), "Old tagged progress renewed the replacement turn")
+        superseding.processLine(try line("event_msg", ["type": "token_count"], time: 6), cursor: sameCursor, now: epoch.addingTimeInterval(6))
+        try check(superseding.active[newTask] == epoch.addingTimeInterval(6)
+                  && superseding.active[otherTask] == epoch.addingTimeInterval(1),
+                  "Anonymous progress failed to refresh only the current turn in its own chat")
+        superseding.processLine(try event("task_complete", "new-turn", time: 7), cursor: sameCursor, now: epoch.addingTimeInterval(7))
+        try check(superseding.active.count == 1 && superseding.active[otherTask] != nil && superseding.output.state == "tool",
+                  "Replacement completion hid another chat's live work")
+        superseding.processLine(try event("task_complete", "other-turn", time: 8), cursor: otherCursor, now: epoch.addingTimeInterval(8))
+        superseding.expire(now: epoch.addingTimeInterval(12.1))
+        try check(superseding.active.isEmpty && superseding.output.state == "idle", "Superseded orphan prevented a final return to idle")
     }
 }

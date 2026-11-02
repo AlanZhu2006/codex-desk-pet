@@ -6,7 +6,7 @@ import CoreGraphics
 struct IdleBehavior {
     struct Output {
         let origin: CGPoint?
-        /// `idle` / `waving` are named states; `static:name` selects a portrait.
+        /// `idle` restores neutral; `static:name` selects a portrait clip.
         let pose: String?
 
         static let none = Output(origin: nil, pose: nil)
@@ -44,6 +44,9 @@ struct IdleBehavior {
 
     private var allowedRect = CGRect.zero
     private var random: RandomSource
+    private static let idlePoses = ["static:smile-closed", "static:confident", "static:notes", "static:knock",
+                                    "static:guilty", "static:stone", "static:confetti"]
+    private var lastChosenPose: String?
     private var journey: Journey?
     private var nextPoseAt: TimeInterval = 0
     private var poseUntil: TimeInterval?
@@ -65,6 +68,7 @@ struct IdleBehavior {
         anchor = clamp(origin, to: self.allowedRect)
         currentOrigin = anchor
         currentPose = "idle"
+        lastChosenPose = nil
         journey = nil
         poseUntil = nil
         wasEligible = false
@@ -81,6 +85,7 @@ struct IdleBehavior {
                          wanderingEnabled: Bool, reduceMotion: Bool,
                          pointerNear: Bool) -> Output {
         guard now.isFinite else { return .none }
+        let clockReversed = lastUpdateAt.map { now < $0 } ?? false
         let timeJumped = lastUpdateAt.map { now < $0 || now - $0 > 1 } ?? false
         lastUpdateAt = now
         let canIdle = eligible && !reduceMotion
@@ -106,16 +111,23 @@ struct IdleBehavior {
         }
 
         // A suspended laptop or delayed run loop must not teleport to the end
-        // of a journey, or execute a burst of missed idle actions on wake.
+        // of a journey. Preserve the expression deadline on forward jumps:
+        // throttled timers may keep arriving more than a second apart. Moving
+        // that deadline on every such tick would starve expressions forever.
+        // An overdue pose is selected once below, with its next deadline based
+        // on now, so waking never replays a backlog of missed expressions.
         if timeJumped {
             journey = nil
-            poseUntil = nil
-            schedule(after: now)
-            let pose = currentPose == "idle" ? nil : "idle"
-            currentPose = "idle"
-            previousPosesEnabled = posesEnabled
-            previousWanderingEnabled = wanderingEnabled
-            return Output(origin: nil, pose: pose)
+            nextJourneyAt = max(nextJourneyAt, now + 2)
+            if clockReversed {
+                poseUntil = nil
+                schedule(after: now)
+                let pose = currentPose == "idle" ? nil : "idle"
+                currentPose = "idle"
+                previousPosesEnabled = posesEnabled
+                previousWanderingEnabled = wanderingEnabled
+                return Output(origin: nil, pose: pose)
+            }
         }
 
         var outputPose: String?
@@ -158,7 +170,9 @@ struct IdleBehavior {
                 currentPose = pose
                 outputPose = pose
             }
-            if pose != "idle" { poseUntil = now + random.value(2.5, 4.5) }
+            // Stone's 3.42-second clip needs enough time to finish one loop.
+            let minimumDuration = pose == "static:stone" ? 3.5 : 2.5
+            poseUntil = now + random.value(minimumDuration, 4.5)
         }
 
         if wanderingEnabled && !pointerNear && journey == nil && currentPose == "idle" && now >= nextJourneyAt {
@@ -187,14 +201,12 @@ struct IdleBehavior {
     }
 
     private mutating func choosePose() -> String {
-        let choice = random.unit()
-        switch choice {
-        case ..<0.30: return "static:smile-closed"
-        case ..<0.52: return "static:confident"
-        case ..<0.74: return "static:notes"
-        case ..<0.92: return "static:knock"
-        default: return "waving"
-        }
+        // Returning to neutral must not forget the previous expressive pose.
+        // All remaining portraits have equal odds, with a reproducible RNG.
+        let choices = Self.idlePoses.filter { $0 != lastChosenPose }
+        let pose = choices[Int(random.unit() * Double(choices.count))]
+        lastChosenPose = pose
+        return pose
     }
 
     private var roamingRect: CGRect {
@@ -267,7 +279,11 @@ struct IdleBehavior {
         var sawMove = false
         var sawPose = false
         var neutralFrames = 0
-        let permitted = Set(["idle", "static:smile-closed", "static:confident", "static:notes", "static:knock", "waving"])
+        let expressivePoses = Set(["static:smile-closed", "static:confident", "static:notes", "static:knock",
+                                   "static:guilty", "static:stone", "static:confetti"])
+        let permitted = expressivePoses.union(["idle"])
+        var seenPoses = Set<String>()
+        var previousExpressivePose: String?
         for step in 1...14_400 {
             let now = Double(step) / 24
             let output = behavior.update(now: now, eligible: true, posesEnabled: true,
@@ -281,12 +297,21 @@ struct IdleBehavior {
             }
             if let pose = output.pose {
                 try require(permitted.contains(pose), "Idle emitted an error or unsupported pose")
-                if pose != "idle" { sawPose = true }
+                if pose != "idle" {
+                    sawPose = true
+                    seenPoses.insert(pose)
+                    try require(pose != previousExpressivePose, "Returning to neutral allowed a repeated random expression")
+                    previousExpressivePose = pose
+                    let minimumDuration = pose == "static:stone" ? 3.5 : 2.5
+                    try require(behavior.poseUntil.map { $0 >= now + minimumDuration && $0 <= now + 4.5 } == true,
+                                "An idle expression's display duration is incorrect")
+                }
             }
             if behavior.currentPose == "idle" { neutralFrames += 1 }
             try require(behavior.anchor == home, "A stroll moved its own home anchor")
         }
         try require(sawMove && sawPose, "A seeded idle session did not exercise both behavior types")
+        try require(seenPoses == expressivePoses, "A seeded idle session did not show all seven distinct expressions")
         try require(neutralFrames > 7_200, "Idle should spend most of its time in a neutral pose")
 
         // The exact same seed and timeline must replay the same visible output.
@@ -398,6 +423,64 @@ struct IdleBehavior {
         let woke = sleeping.update(now: time + 120, eligible: true, posesEnabled: false, wanderingEnabled: true, reduceMotion: false, pointerNear: false)
         try require(woke.origin == nil && !sleeping.isWandering && sleeping.currentOrigin == sleepOrigin && sleeping.anchor == home,
                     "Waking from sleep teleported or shifted home")
+
+        // A throttled run loop is not a new sleep/wake cycle on every tick.
+        // Expressions still run at their ordinary deadlines, while stale
+        // window journeys remain cancelled instead of jumping between frames.
+        var throttled = IdleBehavior(seed: 42)
+        throttled.reset(now: 0, origin: home, allowedRect: legal)
+        var slowPoses = 0
+        var slowPoseStartedAt: TimeInterval?
+        for tick in 0...109 {
+            let now = Double(tick) * 1.1
+            let output = throttled.update(now: now, eligible: true, posesEnabled: true,
+                                          wanderingEnabled: true, reduceMotion: false, pointerNear: false)
+            try require(output.origin == nil && throttled.currentOrigin == home,
+                        "A throttled tick advanced a stale window journey")
+            if let pose = output.pose, pose != "idle" {
+                slowPoses += 1
+                slowPoseStartedAt = now
+                try require(throttled.nextPoseAt >= now + 6 && throttled.nextPoseAt <= now + 12,
+                            "A throttled pose changed the normal expression interval")
+                let minimumDuration = pose == "static:stone" ? 3.5 : 2.5
+                try require(throttled.poseUntil.map { $0 >= now + minimumDuration && $0 <= now + 4.5 } == true,
+                            "A throttled pose changed the normal display duration")
+            } else if output.pose == "idle", let started = slowPoseStartedAt {
+                try require(now - started >= 2.5 && now - started <= 5.6,
+                            "A delayed callback cut short or lost an expression's return to idle")
+                slowPoseStartedAt = nil
+            }
+        }
+        try require(slowPoses >= 8, "Repeated 1.1-second timer delays starved idle expressions")
+
+        // One long gap can choose one overdue expression, but cannot catch up
+        // a journey or immediately replay several missed expression cycles.
+        var gap = IdleBehavior(seed: 8)
+        gap.reset(now: 0, origin: home, allowedRect: legal)
+        var gapTime: TimeInterval = 0
+        while !gap.isWandering && gapTime < 60 {
+            _ = gap.update(now: gapTime, eligible: true, posesEnabled: true,
+                           wanderingEnabled: true, reduceMotion: false, pointerNear: false)
+            gapTime += 1.0 / 24
+        }
+        try require(gap.isWandering, "Expression wake test did not start a journey")
+        let gapOrigin = gap.currentOrigin
+        let wakeTime = gapTime + 120
+        let gapOutput = gap.update(now: wakeTime, eligible: true, posesEnabled: true,
+                                   wanderingEnabled: true, reduceMotion: false, pointerNear: false)
+        try require(gapOutput.origin == nil && !gap.isWandering && gap.currentOrigin == gapOrigin && gap.anchor == home,
+                    "An expression wake caught up a stale window journey")
+        try require(gapOutput.pose.map { $0 != "idle" && permitted.contains($0) } == true &&
+                    gap.nextPoseAt >= wakeTime + 6 && gap.nextPoseAt <= wakeTime + 12,
+                    "An overdue expression did not restart one normal cycle on wake")
+        for tick in 1...143 {
+            let output = gap.update(now: wakeTime + Double(tick) / 24, eligible: true, posesEnabled: true,
+                                    wanderingEnabled: true, reduceMotion: false, pointerNear: false)
+            try require(output.pose == nil || output.pose == "idle", "Waking replayed a backlog of missed expressions")
+            if tick <= 48 {
+                try require(output.origin == nil, "Waking bypassed the movement grace period")
+            }
+        }
 
         // Even a display too small to allow movement must stay finite and idle.
         var tiny = IdleBehavior(seed: 3)
