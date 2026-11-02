@@ -1,0 +1,1218 @@
+{
+  "passed": true,
+  "layout": {
+    "columns": 8,
+    "rows": 4,
+    "cellWidth": 192,
+    "cellHeight": 208,
+    "validFramesPerRow": 6,
+    "footBaselineExclusiveY": 202
+  },
+  "thresholdUsedOnlyForDetection": 128,
+  "cropPaddingSourcePixels": 2,
+  "processing": "Full-sheet connected component extraction, uniform row scale, fixed shoe center and foot baseline. No redraw or color grade. Original source files unchanged. Crop interior RGBA retained before resampling.",
+  "rows": [
+    {
+      "name": "smile-closed",
+      "sourceSha256": "a24da191d9d1d91eda7b8037a4c934bc85b5ff99f71ec5d26d2ced8974d3847d",
+      "sourceAlphaExtrema": [
+        0,
+        254
+      ],
+      "sharedScale": 0.361546499477534,
+      "scaleBasisMedianRetainedHeight": 478.5,
+      "targetRegularHeight": 173,
+      "durationMs": [
+        400,
+        200,
+        200,
+        240,
+        240,
+        900
+      ],
+      "majorComponents": 6,
+      "otherComponentsAboveAlpha128": [
+        {
+          "area": 3,
+          "bbox": [
+            1388,
+            245,
+            1391,
+            248
+          ]
+        },
+        {
+          "area": 1,
+          "bbox": [
+            1400,
+            857,
+            1401,
+            858
+          ]
+        }
+      ],
+      "frames": [
+        {
+          "frame": 0,
+          "componentAreaAtAlpha128": 108717,
+          "coreBBox": [
+            137,
+            43,
+            487,
+            512
+          ],
+          "retainedCropBBox": [
+            135,
+            41,
+            489,
+            514
+          ],
+          "nominalCell": [
+            0,
+            0,
+            512,
+            512
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 469,
+          "retainedHeight": 473,
+          "feetCenterSourceX": 324.5,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.361546499477534,
+          "destinationAlphaBBox": [
+            27,
+            31,
+            155,
+            202
+          ],
+          "destinationOffset": [
+            27,
+            31
+          ],
+          "rgbaSha256": "7d936b2358833aea75b6426dfc2a780606fc7f311264420e0cf8f176c3580c0e"
+        },
+        {
+          "frame": 1,
+          "componentAreaAtAlpha128": 111562,
+          "coreBBox": [
+            586,
+            41,
+            950,
+            512
+          ],
+          "retainedCropBBox": [
+            584,
+            39,
+            952,
+            514
+          ],
+          "nominalCell": [
+            512,
+            0,
+            1024,
+            512
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 471,
+          "retainedHeight": 475,
+          "feetCenterSourceX": 780.5,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.361546499477534,
+          "destinationAlphaBBox": [
+            25,
+            30,
+            158,
+            202
+          ],
+          "destinationOffset": [
+            25,
+            30
+          ],
+          "rgbaSha256": "0dce9468c3f2fc6faef27029285acbe53f50261a0bd954356482e9e8ecee0ebd"
+        },
+        {
+          "frame": 2,
+          "componentAreaAtAlpha128": 118760,
+          "coreBBox": [
+            1045,
+            38,
+            1439,
+            512
+          ],
+          "retainedCropBBox": [
+            1043,
+            36,
+            1441,
+            514
+          ],
+          "nominalCell": [
+            1024,
+            0,
+            1536,
+            512
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 474,
+          "retainedHeight": 478,
+          "feetCenterSourceX": 1269.0,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.361546499477534,
+          "destinationAlphaBBox": [
+            14,
+            29,
+            158,
+            202
+          ],
+          "destinationOffset": [
+            14,
+            29
+          ],
+          "rgbaSha256": "9c3937212d8461a23e631778e1ac5d66a39011726bef558a61f9daea43d7ef8a"
+        },
+        {
+          "frame": 3,
+          "componentAreaAtAlpha128": 123487,
+          "coreBBox": [
+            104,
+            520,
+            521,
+            998
+          ],
+          "retainedCropBBox": [
+            102,
+            518,
+            523,
+            1000
+          ],
+          "nominalCell": [
+            0,
+            512,
+            512,
+            1024
+          ],
+          "crossesNominalCell": true,
+          "coreHeight": 478,
+          "retainedHeight": 482,
+          "feetCenterSourceX": 330.0,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.361546499477534,
+          "destinationAlphaBBox": [
+            14,
+            28,
+            166,
+            202
+          ],
+          "destinationOffset": [
+            14,
+            28
+          ],
+          "rgbaSha256": "2c8645f307fedacd4e508719146e0e1bb4fe8bfec231f97ba8b4f9a71e9c0e6e"
+        },
+        {
+          "frame": 4,
+          "componentAreaAtAlpha128": 113809,
+          "coreBBox": [
+            589,
+            523,
+            958,
+            998
+          ],
+          "retainedCropBBox": [
+            587,
+            521,
+            960,
+            1000
+          ],
+          "nominalCell": [
+            512,
+            512,
+            1024,
+            1024
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 475,
+          "retainedHeight": 479,
+          "feetCenterSourceX": 783.5,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.361546499477534,
+          "destinationAlphaBBox": [
+            25,
+            29,
+            160,
+            202
+          ],
+          "destinationOffset": [
+            25,
+            29
+          ],
+          "rgbaSha256": "d490482f040225056d82ba56c251594466baac52929811f535b793afed540189"
+        },
+        {
+          "frame": 5,
+          "componentAreaAtAlpha128": 112466,
+          "coreBBox": [
+            1082,
+            522,
+            1444,
+            998
+          ],
+          "retainedCropBBox": [
+            1080,
+            520,
+            1446,
+            1000
+          ],
+          "nominalCell": [
+            1024,
+            512,
+            1536,
+            1024
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 476,
+          "retainedHeight": 480,
+          "feetCenterSourceX": 1267.0,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.361546499477534,
+          "destinationAlphaBBox": [
+            28,
+            28,
+            160,
+            202
+          ],
+          "destinationOffset": [
+            28,
+            28
+          ],
+          "rgbaSha256": "d41a26a6af8477246d41f32d6c78af26eb49e0e4915cb8f269f8d4b6a49c8ebf"
+        }
+      ]
+    },
+    {
+      "name": "panic",
+      "sourceSha256": "faa61c73c8ad689f94361ca1bebaf08314827adf7824ed21d03b38e3c6bcf3c0",
+      "sourceAlphaExtrema": [
+        0,
+        254
+      ],
+      "sharedScale": 0.3541453428863869,
+      "scaleBasisMedianRetainedHeight": 488.5,
+      "targetRegularHeight": 173,
+      "durationMs": [
+        160,
+        160,
+        160,
+        180,
+        180,
+        480
+      ],
+      "majorComponents": 6,
+      "otherComponentsAboveAlpha128": [],
+      "frames": [
+        {
+          "frame": 0,
+          "componentAreaAtAlpha128": 125492,
+          "coreBBox": [
+            98,
+            27,
+            483,
+            512
+          ],
+          "retainedCropBBox": [
+            96,
+            25,
+            485,
+            514
+          ],
+          "nominalCell": [
+            0,
+            0,
+            512,
+            512
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 485,
+          "retainedHeight": 489,
+          "feetCenterSourceX": 298.5,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3541453428863869,
+          "destinationAlphaBBox": [
+            24,
+            29,
+            162,
+            202
+          ],
+          "destinationOffset": [
+            24,
+            29
+          ],
+          "rgbaSha256": "a9fa12a0374e6217229c27abafe0a9b8f216ee4d263b9a94acbbc15a2a92a0b9"
+        },
+        {
+          "frame": 1,
+          "componentAreaAtAlpha128": 126212,
+          "coreBBox": [
+            584,
+            27,
+            963,
+            512
+          ],
+          "retainedCropBBox": [
+            582,
+            25,
+            965,
+            514
+          ],
+          "nominalCell": [
+            512,
+            0,
+            1024,
+            512
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 485,
+          "retainedHeight": 489,
+          "feetCenterSourceX": 780.0,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3541453428863869,
+          "destinationAlphaBBox": [
+            26,
+            29,
+            162,
+            202
+          ],
+          "destinationOffset": [
+            26,
+            29
+          ],
+          "rgbaSha256": "4baa929c352adb611864c57d7ef93e0bba0c1fca11cbf52a4416418f5fd16790"
+        },
+        {
+          "frame": 2,
+          "componentAreaAtAlpha128": 125895,
+          "coreBBox": [
+            1071,
+            30,
+            1450,
+            512
+          ],
+          "retainedCropBBox": [
+            1069,
+            28,
+            1452,
+            514
+          ],
+          "nominalCell": [
+            1024,
+            0,
+            1536,
+            512
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 482,
+          "retainedHeight": 486,
+          "feetCenterSourceX": 1265.0,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3541453428863869,
+          "destinationAlphaBBox": [
+            27,
+            30,
+            163,
+            202
+          ],
+          "destinationOffset": [
+            27,
+            30
+          ],
+          "rgbaSha256": "b33998ec61a85d35e8da5149e8f10170db13cfe3809784f07900efc92002ac2f"
+        },
+        {
+          "frame": 3,
+          "componentAreaAtAlpha128": 132482,
+          "coreBBox": [
+            80,
+            526,
+            513,
+            1006
+          ],
+          "retainedCropBBox": [
+            78,
+            524,
+            515,
+            1008
+          ],
+          "nominalCell": [
+            0,
+            512,
+            512,
+            1024
+          ],
+          "crossesNominalCell": true,
+          "coreHeight": 480,
+          "retainedHeight": 484,
+          "feetCenterSourceX": 299.0,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3541453428863869,
+          "destinationAlphaBBox": [
+            18,
+            31,
+            173,
+            202
+          ],
+          "destinationOffset": [
+            18,
+            31
+          ],
+          "rgbaSha256": "899889db47b4290cc8ec51f2df23395d278d2024378242b8db950c0e4abbe90c"
+        },
+        {
+          "frame": 4,
+          "componentAreaAtAlpha128": 128020,
+          "coreBBox": [
+            583,
+            521,
+            969,
+            1006
+          ],
+          "retainedCropBBox": [
+            581,
+            519,
+            971,
+            1008
+          ],
+          "nominalCell": [
+            512,
+            512,
+            1024,
+            1024
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 485,
+          "retainedHeight": 489,
+          "feetCenterSourceX": 780.0,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3541453428863869,
+          "destinationAlphaBBox": [
+            26,
+            29,
+            164,
+            202
+          ],
+          "destinationOffset": [
+            26,
+            29
+          ],
+          "rgbaSha256": "652239a9a4f733c25df87530771cd6dec4939848e1a67636619765d04ad59315"
+        },
+        {
+          "frame": 5,
+          "componentAreaAtAlpha128": 124900,
+          "coreBBox": [
+            1074,
+            522,
+            1453,
+            1006
+          ],
+          "retainedCropBBox": [
+            1072,
+            520,
+            1455,
+            1008
+          ],
+          "nominalCell": [
+            1024,
+            512,
+            1536,
+            1024
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 484,
+          "retainedHeight": 488,
+          "feetCenterSourceX": 1270.0,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3541453428863869,
+          "destinationAlphaBBox": [
+            26,
+            29,
+            162,
+            202
+          ],
+          "destinationOffset": [
+            26,
+            29
+          ],
+          "rgbaSha256": "2d3a9ffa99052c630537b660bd370e6677c9f43a4a768157c677426c83bc59b8"
+        }
+      ]
+    },
+    {
+      "name": "guilty",
+      "sourceSha256": "bcd372db93165336cf4df778014ca6c35804498bdb48880df5b462d9f013dcea",
+      "sourceAlphaExtrema": [
+        0,
+        254
+      ],
+      "sharedScale": 0.3505572441742654,
+      "scaleBasisMedianRetainedHeight": 493.5,
+      "targetRegularHeight": 173,
+      "durationMs": [
+        750,
+        220,
+        180,
+        280,
+        220,
+        1050
+      ],
+      "majorComponents": 6,
+      "otherComponentsAboveAlpha128": [],
+      "frames": [
+        {
+          "frame": 0,
+          "componentAreaAtAlpha128": 115991,
+          "coreBBox": [
+            89,
+            11,
+            452,
+            501
+          ],
+          "retainedCropBBox": [
+            87,
+            9,
+            454,
+            503
+          ],
+          "nominalCell": [
+            0,
+            0,
+            512,
+            512
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 490,
+          "retainedHeight": 494,
+          "feetCenterSourceX": 267.0,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3505572441742654,
+          "destinationAlphaBBox": [
+            33,
+            29,
+            162,
+            202
+          ],
+          "destinationOffset": [
+            33,
+            29
+          ],
+          "rgbaSha256": "4bf8c85194ec96fd0632a4de588424f68ea41ec87274bdec45af2ef8a7d5ad89"
+        },
+        {
+          "frame": 1,
+          "componentAreaAtAlpha128": 116053,
+          "coreBBox": [
+            597,
+            11,
+            958,
+            501
+          ],
+          "retainedCropBBox": [
+            595,
+            9,
+            960,
+            503
+          ],
+          "nominalCell": [
+            512,
+            0,
+            1024,
+            512
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 490,
+          "retainedHeight": 494,
+          "feetCenterSourceX": 774.0,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3505572441742654,
+          "destinationAlphaBBox": [
+            33,
+            29,
+            161,
+            202
+          ],
+          "destinationOffset": [
+            33,
+            29
+          ],
+          "rgbaSha256": "4399d39f5ec601c81e8e307a40abb7a0af7b39c193551edc65e2e687e87b627f"
+        },
+        {
+          "frame": 2,
+          "componentAreaAtAlpha128": 120599,
+          "coreBBox": [
+            1083,
+            10,
+            1458,
+            501
+          ],
+          "retainedCropBBox": [
+            1081,
+            8,
+            1460,
+            503
+          ],
+          "nominalCell": [
+            1024,
+            0,
+            1536,
+            512
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 491,
+          "retainedHeight": 495,
+          "feetCenterSourceX": 1269.0,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3505572441742654,
+          "destinationAlphaBBox": [
+            30,
+            28,
+            163,
+            202
+          ],
+          "destinationOffset": [
+            30,
+            28
+          ],
+          "rgbaSha256": "18b91a049fa5ba73694969cbef7cf9ac61dc0101fdcab2e7df1d6bfceb70c302"
+        },
+        {
+          "frame": 3,
+          "componentAreaAtAlpha128": 118538,
+          "coreBBox": [
+            84,
+            523,
+            456,
+            1012
+          ],
+          "retainedCropBBox": [
+            82,
+            521,
+            458,
+            1014
+          ],
+          "nominalCell": [
+            0,
+            512,
+            512,
+            1024
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 489,
+          "retainedHeight": 493,
+          "feetCenterSourceX": 267.5,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3505572441742654,
+          "destinationAlphaBBox": [
+            31,
+            29,
+            163,
+            202
+          ],
+          "destinationOffset": [
+            31,
+            29
+          ],
+          "rgbaSha256": "39dec880d75ffbc5f6f43a23cb267c7ddcc381cfbf4619dba72c6d804f7ea8bf"
+        },
+        {
+          "frame": 4,
+          "componentAreaAtAlpha128": 117777,
+          "coreBBox": [
+            589,
+            523,
+            962,
+            1012
+          ],
+          "retainedCropBBox": [
+            587,
+            521,
+            964,
+            1014
+          ],
+          "nominalCell": [
+            512,
+            512,
+            1024,
+            1024
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 489,
+          "retainedHeight": 493,
+          "feetCenterSourceX": 776.5,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3505572441742654,
+          "destinationAlphaBBox": [
+            30,
+            29,
+            162,
+            202
+          ],
+          "destinationOffset": [
+            30,
+            29
+          ],
+          "rgbaSha256": "205d9087b07a89a70eadba83295ad9981f38d4981167def5abf0cde59f41635a"
+        },
+        {
+          "frame": 5,
+          "componentAreaAtAlpha128": 117147,
+          "coreBBox": [
+            1086,
+            525,
+            1457,
+            1012
+          ],
+          "retainedCropBBox": [
+            1084,
+            523,
+            1459,
+            1014
+          ],
+          "nominalCell": [
+            1024,
+            512,
+            1536,
+            1024
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 487,
+          "retainedHeight": 491,
+          "feetCenterSourceX": 1265.5,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3505572441742654,
+          "destinationAlphaBBox": [
+            32,
+            30,
+            163,
+            202
+          ],
+          "destinationOffset": [
+            32,
+            30
+          ],
+          "rgbaSha256": "5e0e42130c6f4952748634ddd013c346cd767abf73431143ed4c913c14928a55"
+        }
+      ]
+    },
+    {
+      "name": "stone",
+      "sourceSha256": "fef186a3d840deee22055d110e02454385369ac6ffdf9021327cabdd3ab65488",
+      "sourceAlphaExtrema": [
+        0,
+        254
+      ],
+      "sharedScale": 0.3473895582329317,
+      "scaleBasisMedianRetainedHeight": 498.0,
+      "targetRegularHeight": 173,
+      "durationMs": [
+        1000,
+        200,
+        400,
+        220,
+        300,
+        1300
+      ],
+      "majorComponents": 6,
+      "otherComponentsAboveAlpha128": [
+        {
+          "area": 81,
+          "bbox": [
+            1418,
+            209,
+            1442,
+            239
+          ]
+        },
+        {
+          "area": 67,
+          "bbox": [
+            1417,
+            217,
+            1437,
+            246
+          ]
+        },
+        {
+          "area": 44,
+          "bbox": [
+            119,
+            239,
+            138,
+            254
+          ]
+        },
+        {
+          "area": 42,
+          "bbox": [
+            1070,
+            255,
+            1087,
+            271
+          ]
+        },
+        {
+          "area": 36,
+          "bbox": [
+            1065,
+            251,
+            1079,
+            266
+          ]
+        },
+        {
+          "area": 17,
+          "bbox": [
+            111,
+            240,
+            121,
+            250
+          ]
+        },
+        {
+          "area": 6,
+          "bbox": [
+            1411,
+            214,
+            1416,
+            216
+          ]
+        },
+        {
+          "area": 1,
+          "bbox": [
+            1088,
+            254,
+            1089,
+            255
+          ]
+        }
+      ],
+      "frames": [
+        {
+          "frame": 0,
+          "componentAreaAtAlpha128": 132922,
+          "coreBBox": [
+            86,
+            12,
+            497,
+            508
+          ],
+          "retainedCropBBox": [
+            84,
+            10,
+            499,
+            510
+          ],
+          "nominalCell": [
+            0,
+            0,
+            512,
+            512
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 496,
+          "retainedHeight": 500,
+          "feetCenterSourceX": 285.5,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3473895582329317,
+          "destinationAlphaBBox": [
+            26,
+            28,
+            170,
+            202
+          ],
+          "destinationOffset": [
+            26,
+            28
+          ],
+          "rgbaSha256": "af2965659151d691b8e1f53a1c6a6d450d5492c5aa843857a9fa3200b632f364"
+        },
+        {
+          "frame": 1,
+          "componentAreaAtAlpha128": 129971,
+          "coreBBox": [
+            586,
+            14,
+            977,
+            508
+          ],
+          "retainedCropBBox": [
+            584,
+            12,
+            979,
+            510
+          ],
+          "nominalCell": [
+            512,
+            0,
+            1024,
+            512
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 494,
+          "retainedHeight": 498,
+          "feetCenterSourceX": 766.5,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3473895582329317,
+          "destinationAlphaBBox": [
+            33,
+            29,
+            170,
+            202
+          ],
+          "destinationOffset": [
+            33,
+            29
+          ],
+          "rgbaSha256": "6aed78d84c7c99cd1525ed90eea8d93f3b2ab817bc67d0559f0446fe5d6873f4"
+        },
+        {
+          "frame": 2,
+          "componentAreaAtAlpha128": 132416,
+          "coreBBox": [
+            1057,
+            14,
+            1461,
+            508
+          ],
+          "retainedCropBBox": [
+            1055,
+            12,
+            1463,
+            510
+          ],
+          "nominalCell": [
+            1024,
+            0,
+            1536,
+            512
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 494,
+          "retainedHeight": 498,
+          "feetCenterSourceX": 1250.0,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3473895582329317,
+          "destinationAlphaBBox": [
+            28,
+            29,
+            170,
+            202
+          ],
+          "destinationOffset": [
+            28,
+            29
+          ],
+          "rgbaSha256": "1972787cbae050aa5ef7c0b228029ec7768dcd7807c7a22604715c6610f6f92c"
+        },
+        {
+          "frame": 3,
+          "componentAreaAtAlpha128": 133851,
+          "coreBBox": [
+            86,
+            519,
+            502,
+            1014
+          ],
+          "retainedCropBBox": [
+            84,
+            517,
+            504,
+            1016
+          ],
+          "nominalCell": [
+            0,
+            512,
+            512,
+            1024
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 495,
+          "retainedHeight": 499,
+          "feetCenterSourceX": 285.5,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3473895582329317,
+          "destinationAlphaBBox": [
+            26,
+            29,
+            172,
+            202
+          ],
+          "destinationOffset": [
+            26,
+            29
+          ],
+          "rgbaSha256": "f9c85203b187f2e178ee5c5e1a292d07d5adc58b89575f003c9d6718c0523f93"
+        },
+        {
+          "frame": 4,
+          "componentAreaAtAlpha128": 130356,
+          "coreBBox": [
+            572,
+            520,
+            974,
+            1014
+          ],
+          "retainedCropBBox": [
+            570,
+            518,
+            976,
+            1016
+          ],
+          "nominalCell": [
+            512,
+            512,
+            1024,
+            1024
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 494,
+          "retainedHeight": 498,
+          "feetCenterSourceX": 763.0,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3473895582329317,
+          "destinationAlphaBBox": [
+            29,
+            29,
+            170,
+            202
+          ],
+          "destinationOffset": [
+            29,
+            29
+          ],
+          "rgbaSha256": "9ba106b4ab4dea6e9985d1c7e1a82ffe419bb61ea32a9fe37e7ce41ca4a3a61c"
+        },
+        {
+          "frame": 5,
+          "componentAreaAtAlpha128": 130420,
+          "coreBBox": [
+            1059,
+            520,
+            1467,
+            1013
+          ],
+          "retainedCropBBox": [
+            1057,
+            518,
+            1469,
+            1015
+          ],
+          "nominalCell": [
+            1024,
+            512,
+            1536,
+            1024
+          ],
+          "crossesNominalCell": false,
+          "coreHeight": 493,
+          "retainedHeight": 497,
+          "feetCenterSourceX": 1252.0,
+          "retainedAlphaExtrema": [
+            0,
+            254
+          ],
+          "sharedScale": 0.3473895582329317,
+          "destinationAlphaBBox": [
+            28,
+            29,
+            171,
+            202
+          ],
+          "destinationOffset": [
+            28,
+            29
+          ],
+          "rgbaSha256": "5d749d6588b83d3b827db0f06adef430c86b04ac13527c66ba329dbfd1a041d6"
+        }
+      ]
+    }
+  ],
+  "atlasPath": "claude-desk-pet/macos/Resources/CodexExtraExpressions.png",
+  "atlasSize": [
+    1536,
+    832
+  ],
+  "atlasSha256": "551d10370997ecb66d9d755b0835f717c780d7d7cc8b2f1ebfe6c9d34e087686",
+  "usedFrames": 24,
+  "fullyTransparentUnusedCells": 8,
+  "colorSpace": "sRGB PNG chunk, no ICC profile",
+  "previewTiming": "Four individual GIFs use exact durationMs. Four-up GIF uses those timelines for 12 seconds; no acceleration."
+}

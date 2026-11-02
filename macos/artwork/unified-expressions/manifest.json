@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "created": "2026-11-01",
+  "generator": "built-in image_gen / imagegen skill",
+  "transparent_background": true,
+  "sheet_layout": {
+    "columns": 3,
+    "rows": 2,
+    "width": 1536,
+    "height": 1024
+  },
+  "target_layout": {
+    "columns": 8,
+    "rows": 4,
+    "cell_width": 192,
+    "cell_height": 208,
+    "frames_per_row": 6,
+    "foot_baseline_exclusive": 202,
+    "nominal_character_height": 173
+  },
+  "expressions": [
+    {
+      "name": "smile-closed",
+      "target_row": 0,
+      "source": "sources/smile-closed-source.png",
+      "source_sha256": "a24da191d9d1d91eda7b8037a4c934bc85b5ff99f71ec5d26d2ced8974d3847d",
+      "prompt": "codex/prompts/unified-expressions/smile-closed.md",
+      "prompt_sha256": "3cf22a47f90e25b4156a27bff3ec2abe54c3917d64da57f392dbe0b28e2ee8e7",
+      "input_images": [
+        "macos/artwork/unified-expressions/references/classic-smile.png",
+        "macos/artwork/unified-expressions/references/classic-open.png",
+        "pet/sprites/smile-closed.png"
+      ],
+      "durations_ms": [
+        400,
+        200,
+        200,
+        240,
+        240,
+        900
+      ]
+    },
+    {
+      "name": "panic",
+      "target_row": 1,
+      "source": "sources/panic-source.png",
+      "source_sha256": "faa61c73c8ad689f94361ca1bebaf08314827adf7824ed21d03b38e3c6bcf3c0",
+      "prompt": "codex/prompts/unified-expressions/panic.md",
+      "prompt_sha256": "afccf01215e95cc56a47961dfcdadcf00d536239a3c403fb056c9c1bbf664263",
+      "input_images": [
+        "macos/artwork/unified-expressions/references/classic-open.png",
+        "macos/artwork/unified-expressions/references/classic-smile.png",
+        "pet/sprites/panic.png"
+      ],
+      "durations_ms": [
+        160,
+        160,
+        160,
+        180,
+        180,
+        480
+      ]
+    },
+    {
+      "name": "guilty",
+      "target_row": 2,
+      "source": "sources/guilty-source.png",
+      "source_sha256": "bcd372db93165336cf4df778014ca6c35804498bdb48880df5b462d9f013dcea",
+      "prompt": "codex/prompts/unified-expressions/guilty.md",
+      "prompt_sha256": "4a55c9b3fa53fb2e3e3248933a867d06da1b803feba389be46246aaffa54e7ff",
+      "input_images": [
+        "macos/artwork/unified-expressions/references/classic-open.png",
+        "macos/artwork/unified-expressions/references/classic-smile.png",
+        "pet/sprites/guilty.png"
+      ],
+      "durations_ms": [
+        750,
+        220,
+        180,
+        280,
+        220,
+        1050
+      ]
+    },
+    {
+      "name": "stone",
+      "target_row": 3,
+      "source": "sources/stone-source.png",
+      "source_sha256": "fef186a3d840deee22055d110e02454385369ac6ffdf9021327cabdd3ab65488",
+      "prompt": "codex/prompts/unified-expressions/stone.md",
+      "prompt_sha256": "6b759d7deba48278c57a57d89263adf09243d3a2fda5c040cd62217f471b2dc7",
+      "input_images": [
+        "macos/artwork/unified-expressions/references/classic-book.png",
+        "macos/artwork/unified-expressions/references/classic-open.png",
+        "pet/sprites/stone.png"
+      ],
+      "durations_ms": [
+        1000,
+        200,
+        400,
+        220,
+        300,
+        1300
+      ]
+    }
+  ]
+}

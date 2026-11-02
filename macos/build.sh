@@ -29,6 +29,7 @@ cp "$PET_REPO_ROOT/macos/Info.plist" "$PET_APP_PATH/Contents/Info.plist"
 lipo -create "$PET_WORK_DIR/arm64" "$PET_WORK_DIR/x86_64" \
   -output "$PET_APP_PATH/Contents/MacOS/ClaudeDesktopPet"
 cp "$PET_REPO_ROOT/macos/Resources/Atlas.png" "$PET_APP_PATH/Contents/Resources/Atlas.png"
+cp "$PET_REPO_ROOT/macos/Resources/CodexExtraExpressions.png" "$PET_APP_PATH/Contents/Resources/CodexExtraExpressions.png"
 cp "$PET_REPO_ROOT/codex/animation.json" "$PET_APP_PATH/Contents/Resources/animation.json"
 cp "$PET_REPO_ROOT"/pet/sprites/*.png "$PET_APP_PATH/Contents/Resources/sprites/"
 cp "$PET_REPO_ROOT/LICENSE" "$PET_APP_PATH/Contents/Resources/LICENSE"

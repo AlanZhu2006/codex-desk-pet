@@ -341,14 +341,17 @@ final class PetController: NSObject, NSMenuDelegate {
     private func loadArtwork() {
         if codexClips.isEmpty, let atlas = Self.readImage(resources.appendingPathComponent("Atlas.png")) {
             codexClips = CodexArtwork.clips(atlas: atlas)
+            if let extraAtlas = Self.readImage(resources.appendingPathComponent("CodexExtraExpressions.png")) {
+                codexClips.merge(CodexArtwork.extraClips(atlas: extraAtlas)) { _, extra in extra }
+            }
         }
         for (name, _) in expressionOptions {
             if originalArtwork[name] == nil {
                 originalArtwork[name] = Self.readImage(resources.appendingPathComponent("sprites/\(name).png"))
             }
             if brightness == .codex, let clip = codexClips[name] {
-                // These are the exact vivid Codex pixels, not a gamma-adjusted
-                // rendition of the separate original portrait artwork.
+                // Classic and supplemental frames share the vivid Codex art
+                // direction. Draw their complete cells without color grading.
                 displayFrames[name] = clip.frames.map { PetFrame($0, isAtlasCell: true) }
                 displayDurations[name] = clip.durations
             } else if let image = originalArtwork[name] {
@@ -558,7 +561,11 @@ final class PetController: NSObject, NSMenuDelegate {
         try PetPressTracker.selfTest()
         try PetHoverTracker.selfTest()
         try PortraitColor.selfTest()
-        try CodexArtwork.selfTest(atlas: atlas)
+        guard let extraAtlas = readImage(resources.appendingPathComponent("CodexExtraExpressions.png")) else {
+            throw NSError(domain: "ClaudeDeskPet.SelfTest", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "缺少或无法读取CodexExtraExpressions.png补充动画图集"])
+        }
+        try CodexArtwork.selfTest(atlas: atlas, extraAtlas: extraAtlas)
     }
 
     private func applyAutomaticState(_ state: String) {
