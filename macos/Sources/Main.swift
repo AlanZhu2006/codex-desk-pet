@@ -46,7 +46,7 @@ private enum PetMain {
                 }
                 try PetController.selfTest(resources: resources)
                 try ActivityMonitor.selfTest()
-                print("PASS: 11 animated expressions, unchanged artwork, transparent redraw, hover and gestures, temporary/pinned/random selections, free idle and activity following, full-expression shuffled idle rounds, slow-tick scheduling, and task supersession fixtures")
+                print("PASS: 11 animated expressions, unchanged artwork, transparent redraw, hover and gestures, 15-second selections and continuous shuffled idle rounds, free idle and activity following, independent roaming, slow-tick scheduling, and task supersession fixtures")
             } catch {
                 fputs("Self-test failed: \(error)\n", stderr)
                 exit(1)

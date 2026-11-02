@@ -585,7 +585,10 @@ final class PetController: NSObject, NSMenuDelegate {
         }
         NSApplication.shared.setActivationPolicy(.prohibited)
         let domain = "ClaudeDeskPet.SelectionTest." + UUID().uuidString
-        guard let preferences = UserDefaults(suiteName: domain) else { return }
+        guard let preferences = UserDefaults(suiteName: domain) else {
+            throw NSError(domain: "ClaudeDeskPet.Selection", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "无法创建隔离自测偏好"])
+        }
         defer { preferences.removePersistentDomain(forName: domain) }
         let controller = PetController(resources: resources, defaults: preferences)
         controller.applyActivity(state: "idle", text: "")
@@ -593,11 +596,15 @@ final class PetController: NSObject, NSMenuDelegate {
         item.representedObject = "panic"
         let before = ProcessInfo.processInfo.systemUptime
         controller.selectExpression(item)
+        let after = ProcessInfo.processInfo.systemUptime
         try require(controller.manualExpression == "panic" && controller.manualUntil != nil,
                     "普通菜单选表情不得永久阻止待机")
-        controller.releaseExpiredSelection(at: before + 7)
+        let expiry = controller.manualUntil ?? -.infinity
+        try require(expiry >= before + 15 && expiry <= after + 15,
+                    "手动表情必须使用15秒展示时长")
+        controller.releaseExpiredSelection(at: expiry - 0.001)
         try require(controller.manualExpression == "panic", "临时表情提前结束")
-        controller.releaseExpiredSelection(at: ProcessInfo.processInfo.systemUptime + 9)
+        controller.releaseExpiredSelection(at: expiry)
         try require(controller.manualExpression == nil && controller.currentPortrait == "smile",
                     "临时表情结束后必须恢复自动待机")
 
@@ -620,7 +627,7 @@ final class PetController: NSObject, NSMenuDelegate {
         controller.resumeFollowing()
         controller.applyActivity(state: "tool", text: "")
         controller.selectExpression(item)
-        controller.releaseExpiredSelection(at: ProcessInfo.processInfo.systemUptime + 9)
+        controller.releaseExpiredSelection(at: ProcessInfo.processInfo.systemUptime + 16)
         try require(controller.currentPortrait == "typing" && controller.manualExpression == nil,
                     "临时表情结束后必须恢复最新工作状态")
         controller.enterFreeIdle()
@@ -628,7 +635,7 @@ final class PetController: NSObject, NSMenuDelegate {
         try require(controller.currentPortrait == "smile" && controller.automaticActivityState == "idle",
                     "自由待机不得被仍在运行的任务打断")
         controller.selectExpression(item)
-        controller.releaseExpiredSelection(at: ProcessInfo.processInfo.systemUptime + 9)
+        controller.releaseExpiredSelection(at: ProcessInfo.processInfo.systemUptime + 16)
         try require(controller.currentPortrait == "smile" && !controller.followsActivity,
                     "临时表情结束后应保留自由待机模式")
         controller.resumeFollowing()
@@ -853,7 +860,7 @@ final class PetController: NSObject, NSMenuDelegate {
 
         let pin = addItem("固定当前表情", action: #selector(toggleExpressionPin))
         pin.state = expressionPinned ? .on : .off
-        let expressionItem = NSMenuItem(title: expressionPinned ? "切换固定表情" : "切换表情（展示8秒）", action: nil, keyEquivalent: "")
+        let expressionItem = NSMenuItem(title: expressionPinned ? "切换固定表情" : "切换表情（展示\(Int(IdleBehavior.expressionInterval))秒）", action: nil, keyEquivalent: "")
         let expressionMenu = NSMenu()
         for (name, label) in expressionOptions {
             let item = NSMenuItem(title: label, action: #selector(selectExpression(_:)), keyEquivalent: "")
@@ -939,7 +946,7 @@ final class PetController: NSObject, NSMenuDelegate {
     @objc private func selectExpression(_ sender: NSMenuItem) {
         guard let name = sender.representedObject as? String, expressions[name] != nil else { return }
         manualExpression = name
-        manualUntil = expressionPinned ? nil : ProcessInfo.processInfo.systemUptime + 8
+        manualUntil = expressionPinned ? nil : ProcessInfo.processInfo.systemUptime + IdleBehavior.expressionInterval
         showPortrait(name)
         let label = expressionOptions.first { $0.0 == name }?.1 ?? "切换表情"
         showBubble(label, seconds: 4)
@@ -963,7 +970,7 @@ final class PetController: NSObject, NSMenuDelegate {
         manualExpression = name
         // Ordinary expression selections are temporary. Only the explicit pin
         // action may suspend automatic expressions indefinitely.
-        manualUntil = expressionPinned ? nil : ProcessInfo.processInfo.systemUptime + 8
+        manualUntil = expressionPinned ? nil : ProcessInfo.processInfo.systemUptime + IdleBehavior.expressionInterval
         showPortrait(name)
         let label = expressionOptions.first { $0.0 == name }?.1 ?? name
         showBubble(label, seconds: 3)
