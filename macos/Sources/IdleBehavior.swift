@@ -44,8 +44,10 @@ struct IdleBehavior {
 
     private var allowedRect = CGRect.zero
     private var random: RandomSource
-    private static let idlePoses = ["static:smile-closed", "static:confident", "static:notes", "static:knock",
-                                    "static:guilty", "static:stone", "static:confetti"]
+    private static let idlePoses = ["static:smile", "static:smile-closed", "static:typing", "static:notes",
+                                    "static:knock", "static:confetti", "static:panic", "static:guilty",
+                                    "static:stone", "static:confident", "static:crying"]
+    private var poseBag: [String] = []
     private var lastChosenPose: String?
     private var journey: Journey?
     private var nextPoseAt: TimeInterval = 0
@@ -63,12 +65,13 @@ struct IdleBehavior {
     /// `allowedRect` describes legal *window origins*, after subtracting the
     /// complete panel size from the screen's usable frame. Only reset changes
     /// the home anchor: an autonomous stroll can never move its own home.
+    /// Placement and timing resets retain the unfinished expression round and
+    /// its previous selection, as do neutral returns, hovering and waking.
     mutating func reset(now: TimeInterval, origin: CGPoint, allowedRect: CGRect) {
         self.allowedRect = Self.validRect(allowedRect)
         anchor = clamp(origin, to: self.allowedRect)
         currentOrigin = anchor
         currentPose = "idle"
-        lastChosenPose = nil
         journey = nil
         poseUntil = nil
         wasEligible = false
@@ -162,7 +165,7 @@ struct IdleBehavior {
         }
 
         // Keep the expression steady during a stroll. Most of each idle cycle
-        // stays neutral; brief benign expressions never masquerade as errors.
+        // stays neutral; selected portraits play their own animation frames.
         if posesEnabled && journey == nil && now >= nextPoseAt {
             nextPoseAt = now + random.value(6, 12)
             let pose = choosePose()
@@ -201,10 +204,22 @@ struct IdleBehavior {
     }
 
     private mutating func choosePose() -> String {
-        // Returning to neutral must not forget the previous expressive pose.
-        // All remaining portraits have equal odds, with a reproducible RNG.
-        let choices = Self.idlePoses.filter { $0 != lastChosenPose }
-        let pose = choices[Int(random.unit() * Double(choices.count))]
+        if poseBag.isEmpty {
+            poseBag = Self.idlePoses
+            // Seeded Fisher-Yates: every portrait appears once before any is
+            // reused. This changes clip selection, never a clip's frame order.
+            for index in stride(from: poseBag.count - 1, through: 1, by: -1) {
+                let other = Int(random.unit() * Double(index + 1))
+                poseBag.swapAt(index, other)
+            }
+            // removeLast consumes the next portrait. Avoid repeating the final
+            // portrait of the preceding round across the shuffle boundary.
+            if poseBag.last == lastChosenPose {
+                let other = Int(random.unit() * Double(poseBag.count - 1))
+                poseBag.swapAt(poseBag.count - 1, other)
+            }
+        }
+        let pose = poseBag.removeLast()
         lastChosenPose = pose
         return pose
     }
@@ -279,11 +294,16 @@ struct IdleBehavior {
         var sawMove = false
         var sawPose = false
         var neutralFrames = 0
-        let expressivePoses = Set(["static:smile-closed", "static:confident", "static:notes", "static:knock",
-                                   "static:guilty", "static:stone", "static:confetti"])
-        let permitted = expressivePoses.union(["idle"])
+        let selectedPoses = Set(["static:smile", "static:smile-closed", "static:typing", "static:notes",
+                                "static:knock", "static:confetti", "static:panic", "static:guilty",
+                                "static:stone", "static:confident", "static:crying"])
+        let visibleChanges = selectedPoses.subtracting(["static:smile"])
+        let permitted = selectedPoses.union(["idle"])
         var seenPoses = Set<String>()
+        var seenVisibleChanges = Set<String>()
         var previousExpressivePose: String?
+        var roundSelections: [String] = []
+        var completedRounds = 0
         for step in 1...14_400 {
             let now = Double(step) / 24
             let output = behavior.update(now: now, eligible: true, posesEnabled: true,
@@ -296,23 +316,66 @@ struct IdleBehavior {
                             "A stroll drifted out of its home range")
             }
             if let pose = output.pose {
-                try require(permitted.contains(pose), "Idle emitted an error or unsupported pose")
+                try require(permitted.contains(pose), "Idle emitted an unsupported portrait")
                 if pose != "idle" {
-                    sawPose = true
                     seenPoses.insert(pose)
+                    if pose != "static:smile" {
+                        sawPose = true
+                        seenVisibleChanges.insert(pose)
+                    }
                     try require(pose != previousExpressivePose, "Returning to neutral allowed a repeated random expression")
                     previousExpressivePose = pose
+                    roundSelections.append(pose)
+                    if roundSelections.count == 11 {
+                        try require(Set(roundSelections) == selectedPoses,
+                                    "Returning to neutral reset or lost a shuffled expression round")
+                        completedRounds += 1
+                        roundSelections.removeAll(keepingCapacity: true)
+                    }
                     let minimumDuration = pose == "static:stone" ? 3.5 : 2.5
                     try require(behavior.poseUntil.map { $0 >= now + minimumDuration && $0 <= now + 4.5 } == true,
                                 "An idle expression's display duration is incorrect")
                 }
             }
-            if behavior.currentPose == "idle" { neutralFrames += 1 }
+            // A scheduled smile consumes its bag entry, but is visually the
+            // same as baseline. It must not inflate the visible-change count.
+            if behavior.currentPose == "idle" || behavior.currentPose == "static:smile" { neutralFrames += 1 }
             try require(behavior.anchor == home, "A stroll moved its own home anchor")
         }
         try require(sawMove && sawPose, "A seeded idle session did not exercise both behavior types")
-        try require(seenPoses == expressivePoses, "A seeded idle session did not show all seven distinct expressions")
+        try require(seenPoses == selectedPoses && seenVisibleChanges == visibleChanges && completedRounds >= 3,
+                    "A clock-driven idle session did not complete all eleven selections and ten visible changes per round")
         try require(neutralFrames > 7_200, "Idle should spend most of its time in a neutral pose")
+
+        // Several independent seeds must preserve complete rounds, including
+        // no adjacent repeats at a round boundary, and replay identically.
+        for seed: UInt64 in [0, 1, 17, 42, UInt64.max] {
+            var shuffled = IdleBehavior(seed: seed)
+            var sameSeed = IdleBehavior(seed: seed)
+            var previousSelection: String?
+            for round in 0..<3 {
+                var selections: [String] = []
+                for index in 0..<11 {
+                    let pose = shuffled.choosePose()
+                    try require(pose == sameSeed.choosePose(), "A seeded expression shuffle is not reproducible")
+                    try require(pose != previousSelection, "Shuffled expression rounds repeated an adjacent portrait")
+                    selections.append(pose)
+                    previousSelection = pose
+                    if round == 0 && index == 4 {
+                        // Moving or resizing partway through a round must not
+                        // discard its remaining portraits or repeat history.
+                        let remaining = shuffled.poseBag
+                        let lastSelection = shuffled.lastChosenPose
+                        shuffled.reset(now: 50, origin: home, allowedRect: legal)
+                        sameSeed.reset(now: 50, origin: home, allowedRect: legal)
+                        try require(shuffled.poseBag == remaining && shuffled.lastChosenPose == lastSelection,
+                                    "A placement reset discarded an unfinished expression round")
+                    }
+                }
+                try require(selections.count == 11 && Set(selections) == selectedPoses,
+                            "A shuffled expression round skipped or repeated a portrait")
+            }
+        }
 
         // The exact same seed and timeline must replay the same visible output.
         var replayA = IdleBehavior(seed: 17)
