@@ -10,7 +10,7 @@ struct QuotaSnapshot {
 struct QuotaProvider {
     let id: String
     let name: String
-    let accountNumber: Int?
+    let accountLabel: String?
     let plan: String?
     let windows: [QuotaWindow]
     let details: [String]
@@ -208,13 +208,11 @@ enum QuotaUsage {
         if accountRows.isEmpty {
             let current = providers[index]
             providers[index] = QuotaProvider(
-                id: current.id, name: current.name, accountNumber: nil, plan: current.plan,
+                id: current.id, name: current.name, accountLabel: current.accountLabel, plan: current.plan,
                 windows: current.windows, details: current.details + ["暂未读取到多账号额度，正在显示当前账号。"],
                 unavailable: current.unavailable)
         } else if accountRows.count > 1 {
-            let accounts = accountRows.enumerated().compactMap { offset, row in
-                makeProvider(row, accountNumber: offset + 1)
-            }
+            let accounts = accountRows.compactMap(makeProvider)
             providers.replaceSubrange(index...index, with: accounts)
         } else {
             return snapshot
@@ -222,8 +220,7 @@ enum QuotaUsage {
         return QuotaSnapshot(providers: providers, fetchedAt: snapshot.fetchedAt)
     }
 
-    // Project only display fields. The response can also contain account
-    // identities and provider error diagnostics, which the pet does not display.
+    // Project only display fields. Keep provider error diagnostics out of the panel.
     private static func decode(_ rows: [[String: Any]], exitStatus: Int32, now: Date = Date()) -> QuotaFetchResult {
         if rows.isEmpty { return exitStatus == 0 ? .success(QuotaSnapshot(providers: [], fetchedAt: now)) : .failure }
         let providers = rows.compactMap { makeProvider($0) }
@@ -242,12 +239,16 @@ enum QuotaUsage {
         "alibabatokenplan": "Alibaba Token Plan", "mimo": "Xiaomi MiMo", "stepfun": "StepFun"
     ]
 
-    private static func makeProvider(_ row: [String: Any], accountNumber: Int? = nil) -> QuotaProvider? {
+    private static func makeProvider(_ row: [String: Any]) -> QuotaProvider? {
         guard let id = cleanText(row["provider"], limit: 64), id != "cli" else { return nil }
         let usage = row["usage"] as? [String: Any] ?? [:]
         let labels = row["rateWindowLabels"] as? [String: Any] ?? [:]
         let observation = usage["planObservation"] as? [String: Any]
         let identity = usage["identity"] as? [String: Any]
+        let accountLabel = id == "antigravity"
+            ? cleanText(identity?["accountEmail"], limit: 254, allowEmail: true)
+                ?? cleanText(row["account"], limit: 254, allowEmail: true)
+            : nil
         let plan = cleanText(observation?["rawPlan"]) ?? knownPlan(identity?["loginMethod"] ?? usage["loginMethod"])
         let namedWindows = (usage["extraRateWindows"] as? [[String: Any]] ?? []).compactMap { extra
             -> (id: String, title: Any?, window: [String: Any])? in
@@ -294,7 +295,7 @@ enum QuotaUsage {
         if !unavailable, let age = number(row["ageSeconds"]), age >= 60 {
             details.append("CodexBar 缓存 · \(amount((age / 60).rounded(.down))) 分钟前")
         }
-        return QuotaProvider(id: id, name: providerNames[id] ?? id, accountNumber: accountNumber, plan: plan,
+        return QuotaProvider(id: id, name: providerNames[id] ?? id, accountLabel: accountLabel, plan: plan,
                              windows: windows, details: details, unavailable: unavailable)
     }
 
@@ -351,10 +352,10 @@ enum QuotaUsage {
         return nil
     }
 
-    private static func cleanText(_ value: Any?, limit: Int = 80) -> String? {
+    private static func cleanText(_ value: Any?, limit: Int = 80, allowEmail: Bool = false) -> String? {
         guard let text = (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
               !text.isEmpty, text.count <= limit, text.rangeOfCharacter(from: .controlCharacters) == nil,
-              !text.contains("@"), !text.contains("://") else { return nil }
+              (allowEmail || !text.contains("@")), !text.contains("://") else { return nil }
         return text
     }
 
@@ -384,7 +385,7 @@ enum QuotaUsage {
         guard case let .success(snapshot) = decodeFixture(fixture, exitStatus: 1, now: now),
               snapshot.providers.count == 3, snapshot.fetchedAt == now else { throw TestFailure.contract }
         let codex = snapshot.providers[0]
-        guard codex.name == "Codex", codex.plan == "pro", !codex.unavailable,
+        guard codex.name == "Codex", codex.accountLabel == nil, codex.plan == "pro", !codex.unavailable,
               codex.windows.map(\.label) == ["Weekly", "GPT-5.1-Codex-Spark", "代码审查"],
               codex.windows.map(\.usedPercent) == [27.5, 9, 10],
               codex.windows.allSatisfy({ $0.resetsAt != nil }),
@@ -413,7 +414,7 @@ enum QuotaUsage {
         ]
         let accounts = Data(#"""
         [
-          {"provider":"antigravity","account":"first@example.test","usage":{"primary":{"usedPercent":24}}},
+          {"provider":"antigravity","account":"Work","usage":{"identity":{"accountEmail":"first@example.test"},"primary":{"usedPercent":24}}},
           {"provider":"antigravity","account":"second@example.test","error":{"message":"private error data"}}
         ]
         """#.utf8)
@@ -423,7 +424,7 @@ enum QuotaUsage {
               !isAntigravityAccount(["provider": "antigravity"]) else { throw TestFailure.contract }
         let expanded = expandingAntigravity(in: baseline, with: accounts).providers
         guard expanded.map(\.id) == ["codex", "antigravity", "antigravity", "claude"],
-              expanded.map(\.accountNumber) == [nil, 1, 2, nil],
+              expanded.map(\.accountLabel) == [nil, "first@example.test", "second@example.test", nil],
               expanded.map({ $0.windows.first?.usedPercent }) == [3, 24, nil, 42],
               expanded[2].unavailable, expanded[2].details.isEmpty else { throw TestFailure.contract }
 
@@ -432,8 +433,13 @@ enum QuotaUsage {
         for fallback in [nil, rejected, single] {
             let original = expandingAntigravity(in: baseline, with: fallback).providers
             guard original.map(\.id) == ["codex", "antigravity", "claude"],
-                  original.allSatisfy({ $0.accountNumber == nil }),
+                  original.map(\.accountLabel) == [nil, "first@example.test", nil],
                   original[1].windows.first?.usedPercent == 20 else { throw TestFailure.contract }
+        }
+        let local = makeProvider(["provider": "antigravity", "usage": ["identity": ["accountEmail": "local@example.test"]]])
+        let invalid = makeProvider(["provider": "antigravity", "account": "first@example.test\nsecond@example.test"])
+        guard local?.accountLabel == "local@example.test", invalid?.accountLabel == nil else {
+            throw TestFailure.contract
         }
     }
 

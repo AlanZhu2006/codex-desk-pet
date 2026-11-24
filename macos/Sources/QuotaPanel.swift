@@ -413,9 +413,13 @@ final class QuotaPanelController: NSObject, NSSearchFieldDelegate {
     }
 
     private func providerBlock(_ provider: QuotaProvider) -> NSView {
-        let title = provider.accountNumber.map { "\(provider.name) · 账号 \($0)" } ?? provider.name
-        let name = label(title, font: .systemFont(ofSize: 14, weight: .semibold))
+        let name = label(provider.name, font: .systemFont(ofSize: 14, weight: .semibold))
         var rows: [NSView] = [name]
+        if let accountLabel = provider.accountLabel {
+            let account = label(accountLabel, font: .systemFont(ofSize: 12, weight: .medium), wraps: true)
+            account.lineBreakMode = .byCharWrapping
+            rows.append(account)
+        }
         if let plan = provider.plan, !plan.isEmpty {
             rows.append(label(plan, font: .systemFont(ofSize: 11), color: .secondaryLabelColor, wraps: true))
         }
