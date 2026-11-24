@@ -29,12 +29,56 @@ enum QuotaFetchResult {
     case failure
 }
 
+struct QuotaService {
+    let id: String
+    let name: String
+    let enabled: Bool
+}
+
+enum QuotaServicesResult {
+    case success([QuotaService])
+    case missingDependency
+    case failure
+}
+
 enum QuotaUsage {
     private static let timeout: TimeInterval = 25
+    private static let configTimeout: TimeInterval = 10
     private static let outputLimit = 2 * 1024 * 1024
 
     // Call off the main thread. CodexBar owns account configuration and authentication.
     static func fetch() -> QuotaFetchResult {
+        guard let command = codexBarCommand() else { return .missingDependency }
+        let arguments = ["usage", "--format", "json", "--json-only", "--web-timeout", "15"]
+        guard let (data, exitStatus) = capture(executable: command.executable, arguments: arguments,
+                                              environment: command.environment) else { return .failure }
+        return decode(data, exitStatus: exitStatus)
+    }
+
+    static func services() -> QuotaServicesResult {
+        guard let command = codexBarCommand() else { return .missingDependency }
+        return services(using: command)
+    }
+
+    static func setService(_ id: String, enabled: Bool) -> QuotaServicesResult {
+        guard isServiceID(id) else { return .failure }
+        guard let command = codexBarCommand() else { return .missingDependency }
+        let arguments = ["config", enabled ? "enable" : "disable", "--provider", id]
+        guard let (_, exitStatus) = capture(executable: command.executable, arguments: arguments,
+                                           environment: command.environment, deadlineAfter: configTimeout),
+              exitStatus == 0 else { return .failure }
+        let result = services(using: command)
+        guard case let .success(services) = result,
+              services.first(where: { $0.id == id })?.enabled == enabled else { return .failure }
+        return result
+    }
+
+    private struct Command {
+        let executable: String
+        let environment: [String: String]
+    }
+
+    private static func codexBarCommand() -> Command? {
         let home = FileManager.default.homeDirectoryForCurrentUser
         var environment = ProcessInfo.processInfo.environment
         let standardBins = ["/opt/homebrew/bin", "/usr/local/bin", home.appendingPathComponent(".local/bin").path,
@@ -45,16 +89,34 @@ enum QuotaUsage {
         let helper = "CodexBar.app/Contents/Helpers/CodexBarCLI"
         let candidates = ["/Applications/" + helper, home.appendingPathComponent("Applications/" + helper).path]
             + bins.map { $0 + "/codexbar" }
-        guard let executable = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
-            return .missingDependency
-        }
+        guard let executable = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { return nil }
         environment["PATH"] = bins.joined(separator: ":")
         environment.removeValue(forKey: "CODEXBAR_ALLOW_BROWSER_COOKIE_IMPORT")
-        let arguments = ["usage", "--format", "json", "--json-only", "--web-timeout", "15"]
-        guard let (data, exitStatus) = capture(executable: executable, arguments: arguments, environment: environment) else {
-            return .failure
+        return Command(executable: executable, environment: environment)
+    }
+
+    private static func services(using command: Command) -> QuotaServicesResult {
+        struct Entry: Decodable {
+            let provider: String
+            let displayName: String
+            let enabled: Bool
         }
-        return decode(data, exitStatus: exitStatus)
+        let arguments = ["config", "providers", "--format", "json", "--json-only"]
+        guard let (data, exitStatus) = capture(executable: command.executable, arguments: arguments,
+                                              environment: command.environment, deadlineAfter: configTimeout),
+              exitStatus == 0,
+              let entries = try? JSONDecoder().decode([Entry].self, from: data) else { return .failure }
+        var seen = Set<String>()
+        let services = entries.compactMap { entry -> QuotaService? in
+            guard isServiceID(entry.provider), seen.insert(entry.provider).inserted else { return nil }
+            return QuotaService(id: entry.provider, name: cleanText(entry.displayName) ?? entry.provider,
+                                enabled: entry.enabled)
+        }
+        return .success(services)
+    }
+
+    private static func isServiceID(_ id: String) -> Bool {
+        id.range(of: #"\A[a-z0-9][a-z0-9_-]{0,63}\z"#, options: .regularExpression) != nil
     }
 
     // Poll the pipe with a monotonic deadline. A provider subprocess inheriting

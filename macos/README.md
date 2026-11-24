@@ -38,7 +38,9 @@
 
 ## 订阅额度
 
-额度面板调用本机的 CodexBar CLI，并使用 CodexBar 已启用的服务和已有登录。需要安装 [CodexBar](https://github.com/steipete/CodexBar/releases/latest)（应用要求 macOS 14 或更新版本），可从 CodexBar 的「Settings → Providers」启用并连接你使用的服务。桌宠可以直接找到应用内的 CLI，也支持 Homebrew 的 `codexbar` 命令。
+额度面板调用本机的 CodexBar CLI，并使用 CodexBar 已启用的服务和已有登录。点额度面板右上角的齿轮，可以直接搜索和勾选服务。桌宠通过 CodexBar 保存勾选结果，返回额度面板后重新查询。服务若需要登录或选择认证来源，请点菜单栏的 CodexBar 图标，进入「Settings → Providers」完成连接。
+
+安装 [CodexBar](https://github.com/steipete/CodexBar/releases/latest) 后，桌宠可以直接找到应用内的 CLI，也支持 Homebrew 的 `codexbar` 命令。CodexBar 应用要求 macOS 14 或更新版本。
 
 打开面板时查询额度，短时间内重新打开会复用最近一次结果。服务分别显示查询状态。各服务可能按整个订阅、访问时段或单独模型分配额度，面板沿用服务报告的窗口和单位。桌宠只使用额度显示所需字段，查询结果仅在应用内存中保存。
 

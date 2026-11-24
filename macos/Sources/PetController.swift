@@ -184,6 +184,10 @@ final class PetController: NSObject, NSMenuDelegate {
     private var quotaSnapshot: QuotaSnapshot?
     private var quotaRefreshInFlight = false
     private var quotaLastRefreshFailed = false
+    private let quotaQueue = DispatchQueue(label: "desk-pet.codexbar", qos: .userInitiated)
+    private var managesQuotaServices = false
+    private var quotaServices: [QuotaService]?
+    private var quotaServicesUpdating = false
 
     private let expressionOptions: [(String, String)] = [
         ("smile", "微笑"), ("smile-closed", "眯眼笑"), ("typing", "敲键盘"),
@@ -350,27 +354,45 @@ final class PetController: NSObject, NSMenuDelegate {
             quotaPanel = QuotaPanelController(
                 onRefresh: { [weak self] in self?.refreshQuota() },
                 onClose: { [weak self] in self?.quotaPanel?.hide() },
+                onManage: { [weak self] in self?.manageQuotaServices() },
+                onBack: { [weak self] in self?.showQuotaContent() },
+                onToggleService: { [weak self] id, enabled in self?.setQuotaService(id, enabled: enabled) },
                 onSetup: { [weak self] in self?.openQuotaSetup() }
             )
         }
-        if let snapshot = quotaSnapshot, !quotaLastRefreshFailed,
-           Date().timeIntervalSince(snapshot.fetchedAt) < 60 {
-            quotaPanel?.render(.content(snapshot, refreshing: quotaRefreshInFlight, stale: false))
-        } else {
-            refreshQuota()
-        }
+        showQuotaContent()
         quotaPanel?.show(relativeTo: panel)
     }
 
-    private func refreshQuota() {
-        guard !quotaRefreshInFlight else { return }
-        quotaRefreshInFlight = true
-        if let snapshot = quotaSnapshot {
-            quotaPanel?.render(.content(snapshot, refreshing: true, stale: quotaLastRefreshFailed))
+    private func showQuotaContent() {
+        managesQuotaServices = false
+        if let snapshot = quotaSnapshot, !quotaLastRefreshFailed,
+           Date().timeIntervalSince(snapshot.fetchedAt) < 60 {
+            renderQuota(.content(snapshot, refreshing: quotaRefreshInFlight || quotaServicesUpdating, stale: false))
+        } else if quotaRefreshInFlight || quotaServicesUpdating {
+            showQuotaLoading()
         } else {
-            quotaPanel?.render(.loading)
+            refreshQuota()
         }
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+    }
+
+    private func renderQuota(_ state: QuotaPanelState) {
+        if !managesQuotaServices { quotaPanel?.render(state) }
+    }
+
+    private func showQuotaLoading() {
+        if let snapshot = quotaSnapshot {
+            renderQuota(.content(snapshot, refreshing: true, stale: quotaLastRefreshFailed))
+        } else {
+            renderQuota(.loading)
+        }
+    }
+
+    private func refreshQuota() {
+        guard !quotaRefreshInFlight, !quotaServicesUpdating else { return }
+        quotaRefreshInFlight = true
+        showQuotaLoading()
+        quotaQueue.async { [weak self] in
             let result = QuotaUsage.fetch()
             DispatchQueue.main.async { [weak self] in self?.finishQuotaRefresh(result) }
         }
@@ -382,22 +404,71 @@ final class PetController: NSObject, NSMenuDelegate {
         case .success(let snapshot):
             quotaSnapshot = snapshot
             quotaLastRefreshFailed = false
-            quotaPanel?.render(.content(snapshot, refreshing: false, stale: false))
+            renderQuota(.content(snapshot, refreshing: false, stale: false))
         case .missingDependency:
             quotaLastRefreshFailed = true
-            quotaPanel?.render(.missingDependency)
+            renderQuota(.missingDependency)
         case .failure:
             quotaLastRefreshFailed = true
             if let snapshot = quotaSnapshot {
-                quotaPanel?.render(.content(snapshot, refreshing: false, stale: true))
+                renderQuota(.content(snapshot, refreshing: false, stale: true))
             } else {
-                quotaPanel?.render(.failure)
+                renderQuota(.failure)
             }
         }
     }
 
+    private func manageQuotaServices() {
+        managesQuotaServices = true
+        if let quotaServices {
+            quotaPanel?.renderServices(.content(quotaServices, updating: true, failed: false))
+        } else {
+            quotaPanel?.renderServices(.loading)
+        }
+        runQuotaServiceOperation(QuotaUsage.services)
+    }
+
+    private func setQuotaService(_ id: String, enabled: Bool) {
+        guard managesQuotaServices, !quotaServicesUpdating, let quotaServices,
+              quotaServices.contains(where: { $0.id == id && $0.enabled != enabled }) else { return }
+        quotaPanel?.renderServices(.content(quotaServices, updating: true, failed: false))
+        runQuotaServiceOperation(invalidatesQuota: true) { QuotaUsage.setService(id, enabled: enabled) }
+    }
+
+    private func runQuotaServiceOperation(invalidatesQuota: Bool = false, _ operation: @escaping () -> QuotaServicesResult) {
+        guard !quotaServicesUpdating else { return }
+        quotaServicesUpdating = true
+        quotaQueue.async { [weak self] in
+            let result = operation()
+            DispatchQueue.main.async { [weak self] in
+                self?.finishQuotaServiceOperation(result, invalidatesQuota: invalidatesQuota)
+            }
+        }
+    }
+
+    private func finishQuotaServiceOperation(_ result: QuotaServicesResult, invalidatesQuota: Bool) {
+        quotaServicesUpdating = false
+        // A write may have succeeded even if rereading the provider list failed.
+        if invalidatesQuota { quotaSnapshot = nil }
+        let state: QuotaServicePanelState
+        switch result {
+        case .success(let services):
+            quotaServices = services
+            state = .content(services, updating: false, failed: false)
+        case .missingDependency:
+            quotaServices = nil
+            state = .missingDependency
+        case .failure:
+            state = quotaServices.map { .content($0, updating: false, failed: true) } ?? .failure
+        }
+        if managesQuotaServices {
+            quotaPanel?.renderServices(state)
+        } else if quotaPanel?.isVisible == true {
+            showQuotaContent()
+        }
+    }
+
     private func openQuotaSetup() {
-        quotaPanel?.hide()
         quotaSnapshot = nil
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.steipete.codexbar") {
             let configuration = NSWorkspace.OpenConfiguration()
