@@ -180,6 +180,10 @@ final class PetController: NSObject, NSMenuDelegate {
     private var idleWanderingEnabled = true
     private var statusBubblesEnabled = false
     private var menuOpen = false
+    private var quotaPanel: QuotaPanelController?
+    private var quotaSnapshot: QuotaSnapshot?
+    private var quotaRefreshInFlight = false
+    private var quotaLastRefreshFailed = false
 
     private let expressionOptions: [(String, String)] = [
         ("smile", "微笑"), ("smile-closed", "眯眼笑"), ("typing", "敲键盘"),
@@ -234,7 +238,7 @@ final class PetController: NSObject, NSMenuDelegate {
         if let button = item.button {
             button.image = NSImage(systemSymbolName: "sun.max.fill", accessibilityDescription: "Claude 娘桌宠")
             button.image?.isTemplate = true
-            button.toolTip = "Claude 娘桌宠 · 单击换表情，右键更多选项"
+            button.toolTip = "Claude 娘桌宠 · 点角色看订阅额度"
         }
         item.menu = menu
         statusItem = item
@@ -273,7 +277,7 @@ final class PetController: NSObject, NSMenuDelegate {
         petView.setAccessibilityElement(true)
         petView.setAccessibilityRole(.button)
         petView.setAccessibilityLabel("Claude 娘桌宠")
-        petView.setAccessibilityHelp("单击切换表情，拖动移动，右键更多选项")
+        petView.setAccessibilityHelp("单击查看订阅额度，按住 Option 单击换表情，拖动移动，右键更多选项")
     }
 
     private func configureInteraction() {
@@ -291,6 +295,7 @@ final class PetController: NSObject, NSMenuDelegate {
             let mouse = NSEvent.mouseLocation
             let wasDragging = self.pressTracker.isDragging
             guard self.pressTracker.drag(to: mouse) else { return }
+            if !wasDragging { self.quotaPanel?.hide() }
             if !wasDragging && !self.paused {
                 self.motion.expressionChanged(at: self.animationTime)
                 self.updatePortraitMotion()
@@ -301,12 +306,18 @@ final class PetController: NSObject, NSMenuDelegate {
                                  y: self.dragWindowOrigin.y + mouse.y - self.dragMouseOrigin.y)
             self.panel.setFrameOrigin(self.clampedOrigin(origin, size: self.panel.frame.size, preferPointerScreen: true))
         }
-        petView.onMouseUp = { [weak self] _ in
+        petView.onMouseUp = { [weak self] event in
             guard let self else { return }
             guard self.pressTracker.isPressed else { return }
             let isClick = self.pressTracker.end(at: NSEvent.mouseLocation)
-            if isClick { self.cycleExpression() }
-            else {
+            if isClick {
+                if event.modifierFlags.contains(.option) {
+                    self.quotaPanel?.hide()
+                    self.cycleExpression()
+                } else {
+                    self.toggleQuotaPanel()
+                }
+            } else {
                 if self.manualExpression == nil { self.applyAutomaticState(self.automaticActivityState) }
                 self.savePosition()
                 self.resetIdleBehavior()
@@ -325,7 +336,74 @@ final class PetController: NSObject, NSMenuDelegate {
         }
         petView.onActivate = { [weak self] in
             self?.motion.cancelHover()
-            self?.cycleExpression()
+            self?.toggleQuotaPanel()
+        }
+    }
+
+    @objc private func toggleQuotaPanel() {
+        if quotaPanel?.isVisible == true {
+            quotaPanel?.hide()
+            return
+        }
+        guard !isHidden else { return }
+        if quotaPanel == nil {
+            quotaPanel = QuotaPanelController(
+                onRefresh: { [weak self] in self?.refreshQuota() },
+                onClose: { [weak self] in self?.quotaPanel?.hide() },
+                onSetup: { [weak self] in self?.openQuotaSetup() }
+            )
+        }
+        if let snapshot = quotaSnapshot, !quotaLastRefreshFailed,
+           Date().timeIntervalSince(snapshot.fetchedAt) < 60 {
+            quotaPanel?.render(.content(snapshot, refreshing: quotaRefreshInFlight, stale: false))
+        } else {
+            refreshQuota()
+        }
+        quotaPanel?.show(relativeTo: panel)
+    }
+
+    private func refreshQuota() {
+        guard !quotaRefreshInFlight else { return }
+        quotaRefreshInFlight = true
+        if let snapshot = quotaSnapshot {
+            quotaPanel?.render(.content(snapshot, refreshing: true, stale: quotaLastRefreshFailed))
+        } else {
+            quotaPanel?.render(.loading)
+        }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result = QuotaUsage.fetch()
+            DispatchQueue.main.async { [weak self] in self?.finishQuotaRefresh(result) }
+        }
+    }
+
+    private func finishQuotaRefresh(_ result: QuotaFetchResult) {
+        quotaRefreshInFlight = false
+        switch result {
+        case .success(let snapshot):
+            quotaSnapshot = snapshot
+            quotaLastRefreshFailed = false
+            quotaPanel?.render(.content(snapshot, refreshing: false, stale: false))
+        case .missingDependency:
+            quotaLastRefreshFailed = true
+            quotaPanel?.render(.missingDependency)
+        case .failure:
+            quotaLastRefreshFailed = true
+            if let snapshot = quotaSnapshot {
+                quotaPanel?.render(.content(snapshot, refreshing: false, stale: true))
+            } else {
+                quotaPanel?.render(.failure)
+            }
+        }
+    }
+
+    private func openQuotaSetup() {
+        quotaPanel?.hide()
+        quotaSnapshot = nil
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.steipete.codexbar") {
+            let configuration = NSWorkspace.OpenConfiguration()
+            NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, _ in }
+        } else if let url = URL(string: "https://github.com/steipete/CodexBar/releases/latest") {
+            NSWorkspace.shared.open(url)
         }
     }
 
@@ -751,7 +829,7 @@ final class PetController: NSObject, NSMenuDelegate {
                                        posesEnabled: idleExpressionsEnabled,
                                        wanderingEnabled: idleWanderingEnabled,
                                        reduceMotion: reduceMotion,
-                                       pointerNear: pointerNearPet())
+                                       pointerNear: pointerNearPet() || quotaPanel?.isVisible == true)
         if let origin = idle.origin { panel.setFrameOrigin(origin) }
         if !wasWandering && idleBehavior.isWandering && !paused {
             motion.expressionChanged(at: animationTime)
@@ -818,6 +896,7 @@ final class PetController: NSObject, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         if menu === self.menu {
+            quotaPanel?.hide()
             menuOpen = true
             motion.cancelHover()
             updatePortraitMotion()
@@ -847,6 +926,8 @@ final class PetController: NSObject, NSMenuDelegate {
         let title = NSMenuItem(title: "Claude 娘 · 桌宠", action: nil, keyEquivalent: "")
         title.isEnabled = false
         menu.addItem(title)
+        let usage = addItem("查看订阅额度", action: #selector(toggleQuotaPanel))
+        usage.isEnabled = !isHidden
         menu.addItem(.separator())
         let follow = addItem("自动跟随 Codex", action: #selector(resumeFollowing))
         follow.state = followsActivity && manualExpression == nil ? .on : .off
@@ -1018,6 +1099,7 @@ final class PetController: NSObject, NSMenuDelegate {
     }
 
     private func resizePet(to width: CGFloat, persist: Bool) {
+        quotaPanel?.hide()
         let previous = panel.frame
         currentSize = width
         let headroom: CGFloat = brightness == .codex ? 56 : 24
@@ -1052,7 +1134,12 @@ final class PetController: NSObject, NSMenuDelegate {
 
     @objc private func toggleVisibility() {
         isHidden.toggle()
-        if isHidden { panel.orderOut(nil) } else { panel.orderFrontRegardless() }
+        if isHidden {
+            quotaPanel?.hide()
+            panel.orderOut(nil)
+        } else {
+            panel.orderFrontRegardless()
+        }
         updateClickThrough()
     }
 
@@ -1072,6 +1159,7 @@ final class PetController: NSObject, NSMenuDelegate {
 
     @objc private func resetPosition() {
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        quotaPanel?.hide()
         let visible = screen.visibleFrame
         let origin = NSPoint(x: visible.maxX - panel.frame.width - 38, y: visible.minY + 38)
         panel.setFrameOrigin(clampedOrigin(origin, size: panel.frame.size))
@@ -1099,6 +1187,7 @@ final class PetController: NSObject, NSMenuDelegate {
     }
 
     @objc private func screensChanged() {
+        quotaPanel?.hide()
         panel.setFrameOrigin(clampedOrigin(panel.frame.origin, size: panel.frame.size))
         savePosition()
         resetIdleBehavior()
