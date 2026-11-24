@@ -10,6 +10,7 @@ struct QuotaSnapshot {
 struct QuotaProvider {
     let id: String
     let name: String
+    let accountNumber: Int?
     let plan: String?
     let windows: [QuotaWindow]
     let details: [String]
@@ -43,16 +44,33 @@ enum QuotaServicesResult {
 
 enum QuotaUsage {
     private static let timeout: TimeInterval = 25
+    private static let refreshTimeout: TimeInterval = 35
     private static let configTimeout: TimeInterval = 10
     private static let outputLimit = 2 * 1024 * 1024
 
     // Call off the main thread. CodexBar owns account configuration and authentication.
     static func fetch() -> QuotaFetchResult {
         guard let command = codexBarCommand() else { return .missingDependency }
+        let deadline = ProcessInfo.processInfo.systemUptime + refreshTimeout
         let arguments = ["usage", "--format", "json", "--json-only", "--web-timeout", "15"]
         guard let (data, exitStatus) = capture(executable: command.executable, arguments: arguments,
-                                              environment: command.environment) else { return .failure }
-        return decode(data, exitStatus: exitStatus)
+                                              environment: command.environment),
+              let rows = usageRows(from: data) else { return .failure }
+        let baseline = decode(rows, exitStatus: exitStatus)
+        guard case let .success(snapshot) = baseline,
+              rows.contains(where: isAntigravityAccount) else { return baseline }
+
+        // A tagged baseline row means CodexBar selected a saved account. Scope
+        // the follow-up to Antigravity and let CodexBar select its configured source.
+        let remaining = deadline - ProcessInfo.processInfo.systemUptime
+        let scoped = remaining > 0 ? capture(
+            executable: command.executable,
+            arguments: arguments + ["--provider", "antigravity", "--all-accounts"],
+            environment: command.environment,
+            deadlineAfter: remaining
+        ) : nil
+        // CodexBar can return a nonzero status alongside usable account rows.
+        return .success(expandingAntigravity(in: snapshot, with: scoped?.0))
     }
 
     static func services() -> QuotaServicesResult {
@@ -173,12 +191,42 @@ enum QuotaUsage {
         return (data, process.terminationStatus)
     }
 
+    private static func usageRows(from data: Data) -> [[String: Any]]? {
+        (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]]
+    }
+
+    private static func isAntigravityAccount(_ row: [String: Any]) -> Bool {
+        // Check only for the presence of the account tag. Its value may be an email.
+        row["provider"] as? String == "antigravity"
+            && (row["account"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    private static func expandingAntigravity(in snapshot: QuotaSnapshot, with data: Data?) -> QuotaSnapshot {
+        guard let index = snapshot.providers.firstIndex(where: { $0.id == "antigravity" }) else { return snapshot }
+        let accountRows = data.flatMap(usageRows(from:))?.filter(isAntigravityAccount) ?? []
+        var providers = snapshot.providers
+        if accountRows.isEmpty {
+            let current = providers[index]
+            providers[index] = QuotaProvider(
+                id: current.id, name: current.name, accountNumber: nil, plan: current.plan,
+                windows: current.windows, details: current.details + ["暂未读取到多账号额度，正在显示当前账号。"],
+                unavailable: current.unavailable)
+        } else if accountRows.count > 1 {
+            let accounts = accountRows.enumerated().compactMap { offset, row in
+                makeProvider(row, accountNumber: offset + 1)
+            }
+            providers.replaceSubrange(index...index, with: accounts)
+        } else {
+            return snapshot
+        }
+        return QuotaSnapshot(providers: providers, fetchedAt: snapshot.fetchedAt)
+    }
+
     // Project only display fields. The response can also contain account
     // identities and provider error diagnostics, which the pet does not display.
-    private static func decode(_ data: Data, exitStatus: Int32, now: Date = Date()) -> QuotaFetchResult {
-        guard let rows = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else { return .failure }
+    private static func decode(_ rows: [[String: Any]], exitStatus: Int32, now: Date = Date()) -> QuotaFetchResult {
         if rows.isEmpty { return exitStatus == 0 ? .success(QuotaSnapshot(providers: [], fetchedAt: now)) : .failure }
-        let providers = rows.compactMap(makeProvider)
+        let providers = rows.compactMap { makeProvider($0) }
         guard !providers.isEmpty else { return .failure }
         // A provider error gives the whole CLI invocation a nonzero exit code,
         // but its successful sibling rows still carry valid quota data.
@@ -194,7 +242,7 @@ enum QuotaUsage {
         "alibabatokenplan": "Alibaba Token Plan", "mimo": "Xiaomi MiMo", "stepfun": "StepFun"
     ]
 
-    private static func makeProvider(_ row: [String: Any]) -> QuotaProvider? {
+    private static func makeProvider(_ row: [String: Any], accountNumber: Int? = nil) -> QuotaProvider? {
         guard let id = cleanText(row["provider"], limit: 64), id != "cli" else { return nil }
         let usage = row["usage"] as? [String: Any] ?? [:]
         let labels = row["rateWindowLabels"] as? [String: Any] ?? [:]
@@ -246,7 +294,7 @@ enum QuotaUsage {
         if !unavailable, let age = number(row["ageSeconds"]), age >= 60 {
             details.append("CodexBar 缓存 · \(amount((age / 60).rounded(.down))) 分钟前")
         }
-        return QuotaProvider(id: id, name: providerNames[id] ?? id, plan: plan,
+        return QuotaProvider(id: id, name: providerNames[id] ?? id, accountNumber: accountNumber, plan: plan,
                              windows: windows, details: details, unavailable: unavailable)
     }
 
@@ -315,6 +363,10 @@ enum QuotaUsage {
     }
 
     static func selfTest() throws {
+        func decodeFixture(_ data: Data, exitStatus: Int32, now: Date = Date()) -> QuotaFetchResult {
+            guard let rows = usageRows(from: data) else { return .failure }
+            return decode(rows, exitStatus: exitStatus, now: now)
+        }
         let fixture = Data(#"""
         [
           {"provider":"codex", "account":"private@example.test", "rateWindowLabels":{"secondary":"Weekly"},
@@ -329,7 +381,7 @@ enum QuotaUsage {
         ]
         """#.utf8)
         let now = Date(timeIntervalSince1970: 1_800_000_000)
-        guard case let .success(snapshot) = decode(fixture, exitStatus: 1, now: now),
+        guard case let .success(snapshot) = decodeFixture(fixture, exitStatus: 1, now: now),
               snapshot.providers.count == 3, snapshot.fetchedAt == now else { throw TestFailure.contract }
         let codex = snapshot.providers[0]
         guard codex.name == "Codex", codex.plan == "pro", !codex.unavailable,
@@ -344,12 +396,45 @@ enum QuotaUsage {
         let kimi = snapshot.providers[2]
         guard kimi.windows.first?.usedPercent == 100, kimi.windows.first?.label == "5 小时额度",
               kimi.details == ["5 小时额度限额 \(amount(1000)) requests"] else { throw TestFailure.contract }
-        guard case .failure = decode(Data(#"[{"provider":"cli","error":{"message":"private config detail"}}]"#.utf8), exitStatus: 1),
-              case .failure = decode(Data("{}".utf8), exitStatus: 0),
-              case let .success(empty) = decode(Data("[]".utf8), exitStatus: 0), empty.providers.isEmpty else {
+        guard case .failure = decodeFixture(Data(#"[{"provider":"cli","error":{"message":"private config detail"}}]"#.utf8), exitStatus: 1),
+              case .failure = decodeFixture(Data("{}".utf8), exitStatus: 0),
+              case let .success(empty) = decodeFixture(Data("[]".utf8), exitStatus: 0), empty.providers.isEmpty else {
             throw TestFailure.contract
         }
         try testAntigravitySummaryAliases()
+        try testAntigravityAccounts()
+    }
+
+    private static func testAntigravityAccounts() throws {
+        let baselineRows: [[String: Any]] = [
+            ["provider": "codex", "usage": ["primary": ["usedPercent": 3]]],
+            ["provider": "antigravity", "account": "first@example.test", "usage": ["primary": ["usedPercent": 20]]],
+            ["provider": "claude", "usage": ["primary": ["usedPercent": 42]]]
+        ]
+        let accounts = Data(#"""
+        [
+          {"provider":"antigravity","account":"first@example.test","usage":{"primary":{"usedPercent":24}}},
+          {"provider":"antigravity","account":"second@example.test","error":{"message":"private error data"}}
+        ]
+        """#.utf8)
+        guard case let .success(baseline) = decode(baselineRows, exitStatus: 0),
+              baselineRows.filter(isAntigravityAccount).count == 1,
+              !isAntigravityAccount(["provider": "antigravity", "account": " "]),
+              !isAntigravityAccount(["provider": "antigravity"]) else { throw TestFailure.contract }
+        let expanded = expandingAntigravity(in: baseline, with: accounts).providers
+        guard expanded.map(\.id) == ["codex", "antigravity", "antigravity", "claude"],
+              expanded.map(\.accountNumber) == [nil, 1, 2, nil],
+              expanded.map({ $0.windows.first?.usedPercent }) == [3, 24, nil, 42],
+              expanded[2].unavailable, expanded[2].details.isEmpty else { throw TestFailure.contract }
+
+        let single = Data(#"[{"provider":"antigravity","account":"first@example.test","usage":{"primary":{"usedPercent":24}}}]"#.utf8)
+        let rejected = Data(#"[{"provider":"cli","error":{"message":"private error data"}}]"#.utf8)
+        for fallback in [nil, rejected, single] {
+            let original = expandingAntigravity(in: baseline, with: fallback).providers
+            guard original.map(\.id) == ["codex", "antigravity", "claude"],
+                  original.allSatisfy({ $0.accountNumber == nil }),
+                  original[1].windows.first?.usedPercent == 20 else { throw TestFailure.contract }
+        }
     }
 
     private static func testAntigravitySummaryAliases() throws {

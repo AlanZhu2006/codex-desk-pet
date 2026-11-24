@@ -44,6 +44,8 @@
 
 打开面板时查询额度，短时间内重新打开会复用最近一次结果。服务分别显示查询状态。各服务可能按整个订阅、访问时段或单独模型分配额度，面板沿用服务报告的窗口和单位。桌宠只使用额度显示所需字段，查询结果仅在应用内存中保存。
 
+Antigravity 的「Auto」和「Google OAuth」来源支持读取 CodexBar 已保存的多个 Google 账号。多个账号按 CodexBar 的账号列表顺序编号，各自显示额度和重置时间。「Local API / agy CLI」来源显示本机 Antigravity 客户端当前登录账号。
+
 ## 从源码构建和安装
 
 构建需要 Apple 的 Xcode Command Line Tools（`xcode-select --install`）。在仓库根目录运行：
