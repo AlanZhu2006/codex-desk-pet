@@ -201,15 +201,30 @@ enum QuotaUsage {
         let observation = usage["planObservation"] as? [String: Any]
         let identity = usage["identity"] as? [String: Any]
         let plan = cleanText(observation?["rawPlan"]) ?? knownPlan(identity?["loginMethod"] ?? usage["loginMethod"])
+        let namedWindows = (usage["extraRateWindows"] as? [[String: Any]] ?? []).compactMap { extra
+            -> (id: String, title: Any?, window: [String: Any])? in
+            guard extra["usageKnown"] as? Bool != false,
+                  let raw = extra["window"] as? [String: Any],
+                  raw["isSyntheticPlaceholder"] as? Bool != true,
+                  let used = number(raw["usedPercent"]), used >= 0 else { return nil }
+            return (extra["id"] as? String ?? "", extra["title"], raw)
+        }
+        // CodexBar copies Antigravity's compact representatives from its named quota summary.
+        // Match the copied payload so independent windows and older fallback data still display.
+        let antigravitySummaries = id == "antigravity" ? namedWindows.filter {
+            $0.id.hasPrefix("antigravity-quota-summary-")
+        }.map(\.window) : []
         var windows: [QuotaWindow] = []
         var details: [String] = []
         for (key, fallback) in [("primary", "主要额度"), ("secondary", "次要额度"), ("tertiary", "额外额度")] {
             guard let raw = usage[key] as? [String: Any] else { continue }
+            if key != "tertiary", antigravitySummaries.contains(where: { NSDictionary(dictionary: raw).isEqual(to: $0) }) {
+                continue
+            }
             addWindow(raw, title: labels[key], fallback: fallback, windows: &windows, details: &details)
         }
-        for extra in usage["extraRateWindows"] as? [[String: Any]] ?? [] {
-            guard extra["usageKnown"] as? Bool != false, let raw = extra["window"] as? [String: Any] else { continue }
-            addWindow(raw, title: extra["title"], fallback: "额外额度", windows: &windows, details: &details)
+        for extra in namedWindows {
+            addWindow(extra.window, title: extra.title, fallback: "额外额度", windows: &windows, details: &details)
         }
         if let dashboard = row["openaiDashboard"] as? [String: Any] {
             if let limit = dashboard["codeReviewLimit"] as? [String: Any], number(limit["usedPercent"]) != nil {
@@ -334,6 +349,35 @@ enum QuotaUsage {
               case let .success(empty) = decode(Data("[]".utf8), exitStatus: 0), empty.providers.isEmpty else {
             throw TestFailure.contract
         }
+        try testAntigravitySummaryAliases()
+    }
+
+    private static func testAntigravitySummaryAliases() throws {
+        let session: [String: Any] = ["usedPercent": 17.1, "windowMinutes": 300, "resetsAt": "2026-11-24T04:50:00Z"]
+        let weekly: [String: Any] = ["usedPercent": 5, "windowMinutes": 10_080, "resetsAt": "2026-11-30T23:50:00Z"]
+        let thirdPartySession: [String: Any] = ["usedPercent": 0, "windowMinutes": 300, "resetsAt": "2026-11-24T06:50:00Z"]
+        let thirdPartyWeekly: [String: Any] = ["usedPercent": 0, "windowMinutes": 10_080, "resetsAt": "2026-12-01T01:50:00Z"]
+        func bucket(_ id: String, _ title: String, _ window: [String: Any], known: Bool = true) -> [String: Any] {
+            ["id": "antigravity-quota-summary-" + id, "title": title, "window": window, "usageKnown": known]
+        }
+        let geminiWeekly = bucket("gemini-weekly", "Gemini weekly", weekly)
+        let claudeWeekly = bucket("3p-weekly", "Claude/GPT weekly", thirdPartyWeekly)
+        let all = [bucket("gemini-5h", "Gemini 5-hour", session), geminiWeekly,
+                   bucket("3p-5h", "Claude/GPT 5-hour", thirdPartySession), claudeWeekly]
+        func labels(primary: [String: Any], secondary: [String: Any], extras: [[String: Any]]) -> [String]? {
+            makeProvider(["provider": "antigravity",
+                          "rateWindowLabels": ["primary": "Gemini Models", "secondary": "Claude and GPT"],
+                          "usage": ["primary": primary, "secondary": secondary, "extraRateWindows": extras]])?.windows.map(\.label)
+        }
+        guard labels(primary: session, secondary: thirdPartySession, extras: all) ==
+            ["Gemini 5-hour", "Gemini weekly", "Claude/GPT 5-hour", "Claude/GPT weekly"],
+            labels(primary: weekly, secondary: thirdPartyWeekly, extras: [geminiWeekly, claudeWeekly]) ==
+                ["Gemini weekly", "Claude/GPT weekly"],
+            labels(primary: session, secondary: thirdPartySession, extras: [geminiWeekly]) ==
+                ["Gemini Models", "Claude and GPT", "Gemini weekly"],
+            labels(primary: session, secondary: thirdPartySession,
+                   extras: [bucket("gemini-5h", "Unavailable", session, known: false)]) ==
+                ["Gemini Models", "Claude and GPT"] else { throw TestFailure.contract }
     }
 
     private enum TestFailure: LocalizedError {
